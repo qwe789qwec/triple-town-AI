@@ -9,26 +9,35 @@ from pathlib import Path
 
 reader = easyocr.Reader(['en'], gpu = True)
 
-screen_w, screen_h = 802, 639
-score_x, score_y, score_w, score_h = 100, 40, 380, 50
-game_area_x, game_area_y, game_area_w, game_area_h = 35, 90, 512, 512
-
 class playgame:
     def __init__(self, save_dir='gameplay'):
         self.step = 0
         self.save_dir = save_dir
         self.game_number = self.get_next_game_number()
+        # get window position
         self.screen_x, self.screen_y = self.get_window_info()
+        print(self.screen_x, self.screen_y)
+        self.screen_w, self.screen_h = 802, 639
+
+        # mouse standby and play game init
         self.mouse_x = self.screen_x + 533
         self.mouse_y = self.screen_y + 108
+        self.game_x = self.screen_x + 70
+        self.game_y = self.screen_y + 160
 
-        self.mouse_game_x = self.screen_x + 70
-        self.mouse_game_y = self.screen_y + 160
+        # score region
+        self.score_x = 100
+        self.score_y = 40
+        self.score_w = 380
+        self.score_h = 50
+
+        # end game and start game position
         self.end_x = self.screen_x + 682
         self.end_y = self.screen_y + 247
         self.start_x = self.screen_x + 97
         self.start_y = self.screen_y + 198
 
+        # slot for game and recognize
         self.slot_gap = 80
         self.slot_size = 60
 
@@ -48,21 +57,6 @@ class playgame:
         else:
             print("no matching window found!")
             return -1, -1
-        
-
-    def get_latest_image(self, folder_path = '/home/wilson/Pictures/Screenshots'):
-        files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
-        image_files = [f for f in files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif'))]
-
-        if not image_files:
-            print("could not find any image files in the folder")
-            return None
-        
-        latest_image = max(image_files, key=lambda f: os.path.getmtime(os.path.join(folder_path, f)))
-        latest_image_path = os.path.join(folder_path, latest_image)
-        image = cv2.imread(latest_image_path)
-        # os.remove(latest_image_path)
-        return image
 
     def get_next_game_number(self):
         os.makedirs(self.save_dir, exist_ok=True)
@@ -83,7 +77,7 @@ class playgame:
     def take_screenshot(self):
         pyautogui.moveTo(self.mouse_x, self.mouse_y)
         pyautogui.click()
-        screenshot = pyautogui.screenshot(region=(self.screen_x, self.screen_y, screen_w, screen_h))
+        screenshot = pyautogui.screenshot(region=(self.screen_x, self.screen_y, self.screen_w, self.screen_h))
         frame = np.array(screenshot)
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         self.latest_image = frame
@@ -94,7 +88,6 @@ class playgame:
             return
         pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         self.step = self.step + 1
-        now_score = self.get_score()
         filename = f"game_{self.game_number}_{self.step}_{action}.png"
         pil_image.save(os.path.join(self.save_dir, filename))
 
@@ -106,19 +99,22 @@ class playgame:
         cv2.destroyAllWindows()
 
     def get_score(self):
-        score_region = self.latest_image[score_y:score_y + score_h, score_x:score_x + score_w]
-        gray = cv2.cvtColor(score_region, cv2.COLOR_BGR2GRAY)
-        _, thresh_image = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
-        # score = pytesseract.image_to_string(thresh_image, config='outputbase digits')
-        # self.save_image(thresh_image)
-        score = reader.readtext(thresh_image)
-        # self.show_image(thresh_image)
-        # if not score:
-        #     self.save_image(thresh_image)
-        #     self.show_image(thresh_image)
-        #     return 0
-        if not score:
-            return None  # return the last known score
+        score = None
+        check_time = 0
+
+        while score is None and check_time < 2:
+            score_region = self.latest_image[self.score_y:self.score_y + self.score_h, self.score_x:self.score_x + self.score_w]
+            gray = cv2.cvtColor(score_region, cv2.COLOR_BGR2GRAY)
+            _, thresh_image = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+            score = reader.readtext(thresh_image)
+            check_time += 1
+            if score is None and check_time < 2:
+                time.sleep(1)
+                self.take_screenshot()
+        
+        if score is None:
+            return 0
+
         score_str = score[0][1]  # get the first detected text
         try:
             if score_str.count(',') > 0:
@@ -138,24 +134,20 @@ class playgame:
 
     def get_game_area(self):
         check_time = 0
-        while True:
+        while check_time < 2:
             slot_matrix = np.full((6, 6), -1)
-            invalid_detected = False
             for slot in range(36):
                 row, col = divmod(slot, 6)
                 slot_x, slot_y = self.slot_region(row, col)
                 slot_img = self.latest_image[slot_y:slot_y + self.slot_size, slot_x:slot_x + self.slot_size]
                 index = self.find_matching_item(slot_img)
-                # print(f"slot {slot} matched with item {index}")
-                slot_matrix[col, row] = index
-                if index == 21 and check_time <= 1:
+                if index >= 21:
                     time.sleep(1.5)
-                    print(f"Invalid index {index} detected. Retrying in 1 seconds...")
-                    invalid_detected = True
+                    self.take_screenshot()
+                    check_time += 1
                     break
-            if invalid_detected:
-                check_time += 1
-                self.take_screenshot()
+                slot_matrix[col, row] = index
+            if index >= 21:
                 continue
             else:
                 break
@@ -163,10 +155,6 @@ class playgame:
         next_item = self.latest_image[85:85 + 60, 508:508 + 60]
         next_item_id = self.find_matching_item(next_item)
         return slot_matrix, next_item_id
-        # self.save_image(next_item, 37)
-        # game_area = self.latest_image[game_area_y:game_area_y + game_area_h, game_area_x:game_area_x + game_area_w]
-        # gray_game_area = cv2.cvtColor(game_area, cv2.COLOR_BGR2GRAY)
-        # return game_area
 
     def slot_with_item(self, slot, item):
 
@@ -193,7 +181,8 @@ class playgame:
     def find_matching_item(self, item_image):
         max_match_value = 0.6
         matching_item_id = None
-        
+        item_image_gray = cv2.cvtColor(item_image, cv2.COLOR_BGR2GRAY)
+
         for item_folder in os.listdir("item_template"):
             item_folder_path = os.path.join("item_template", item_folder)
             
@@ -204,7 +193,6 @@ class playgame:
                     if template_image is None:
                         continue
                     
-                    item_image_gray = cv2.cvtColor(item_image, cv2.COLOR_BGR2GRAY)
                     result = cv2.matchTemplate(item_image_gray, template_image, cv2.TM_CCOEFF_NORMED)
                     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
                     
@@ -215,13 +203,12 @@ class playgame:
                         if not template_file.startswith("0_"):
                             new_name = f"0_{template_file}"
                             new_path = os.path.join(item_folder_path, new_name)
-                            os.rename(template_image_path, new_path)  # 修改文件名
+                            os.rename(template_image_path, new_path)
                             print(f"Renamed: {template_image_path} -> {new_path}")
                         break
 
         if matching_item_id is None:
             print("No match found, creating a new folder for this item.")
-            time.sleep(3)
             new_item_id = str(self.get_next_path_id("item_template"))
             new_folder = os.path.join("item_template", new_item_id)
             new_folder = Path(new_folder)
@@ -256,8 +243,7 @@ class playgame:
 
         # get window position
         if max_val > 0.8:  # matching threshold
-            print(f"end game position: {max_loc}")
-            print(max_val)
+            print(f"game end")
             return True
         else:
             # print("no matching window found!")
@@ -273,13 +259,12 @@ class playgame:
         self.save_image(self.latest_image, pos_number)
 
         row, col = divmod(pos_number, 6)
-        pyautogui.moveTo(self.mouse_game_x + self.slot_gap * col, self.mouse_game_y + self.slot_gap * row)
+        pyautogui.moveTo(self.game_x + self.slot_gap * col, self.game_y + self.slot_gap * row)
         pyautogui.click()
         if pos_number in {2, 3}:
             time.sleep(5.0)
         else:
             time.sleep(1.0)
-
 
     def restart_game(self):
         pyautogui.click(self.end_x, self.end_y)
@@ -287,14 +272,10 @@ class playgame:
         pyautogui.click(self.start_x, self.start_y)
         time.sleep(5)
 
-# gamesc = GameScreen()
-
-# for i in range(3):
-#     gamesc.take_screenshot()
-#     # gamesc.show_image(gamesc.latest_image)
-#     gamesc.save_image(gamesc.latest_image, 12)
-#     state , next_item = gamesc.get_game_area()
-#     print(state)
-#     print(next_item)
-#     print(gamesc.get_score())
-#     time.sleep(1)
+# gamesc = playgame()
+# gamesc.take_screenshot()
+# gamesc.save_image(gamesc.latest_image, 12)
+# state , next_item = gamesc.get_game_area()
+# print(state)
+# print(next_item)
+# print(gamesc.get_score())
