@@ -112,8 +112,9 @@ class playgame:
                 time.sleep(1)
                 self.take_screenshot()
         
-        if score is None:
+        if score == [] or score is None:
             return 0
+        # print(score)
 
         score_str = score[0][1]  # get the first detected text
         try:
@@ -134,20 +135,23 @@ class playgame:
 
     def get_game_area(self):
         check_time = 0
-        while check_time < 2:
+        while check_time < 3:
             slot_matrix = np.full((6, 6), -1)
             for slot in range(36):
                 row, col = divmod(slot, 6)
                 slot_x, slot_y = self.slot_region(row, col)
                 slot_img = self.latest_image[slot_y:slot_y + self.slot_size, slot_x:slot_x + self.slot_size]
                 index = self.find_matching_item(slot_img)
-                if index >= 21:
+                if index >= 21 and check_time < 2:
+                    print(f"get item 21 the {check_time} time to check")
                     time.sleep(1.5)
                     self.take_screenshot()
                     check_time += 1
                     break
                 slot_matrix[col, row] = index
-            if index >= 21:
+            if check_time == 2:
+                break
+            elif index >= 21:
                 continue
             else:
                 break
@@ -274,6 +278,7 @@ class playgame:
 
 # gamesc = playgame()
 # gamesc.take_screenshot()
+# gamesc.latest_image = cv2.imread('gameplay/game_3_20_0.png')
 # gamesc.save_image(gamesc.latest_image, 12)
 # state , next_item = gamesc.get_game_area()
 # print(state)
