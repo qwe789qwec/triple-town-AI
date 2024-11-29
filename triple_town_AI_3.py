@@ -77,7 +77,7 @@ class DQN(nn.Module):
         self.conv1 = nn.Conv2d(1, board_size, kernel_size=3, padding=0)
         self.conv2 = nn.Conv2d(board_size, board_size, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(board_size, board_size, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(5 * 5 * 6, 128)
+        self.fc1 = nn.Linear((board_size-1) * (board_size-1) * board_size, 128)
         self.fc2 = nn.Linear(128, board_size * board_size)
 
     def forward(self, x):
@@ -105,6 +105,7 @@ memory = ReplayMemory(10000)
 
 def load_memory(load_size=150):
     game_folder = 'gameplay'
+    print("start load memory")
     image_files = sorted(
         [f for f in os.listdir(game_folder) if f.endswith(('.png', '.jpg', '.jpeg'))],
         key=lambda f: os.path.getmtime(os.path.join(game_folder, f))
@@ -119,7 +120,7 @@ def load_memory(load_size=150):
         current_num1, current_step, current_action = map(int, numbers1)
         numbers2 = next.replace("game_", "").replace(".png", "").split("_")
         next_num2, next_step, next_action = map(int, numbers2)
-        print(current)
+        # print(current)
 
         if current_num1 == next_num2 and next_step - current_step == 1:
             if current_state is None:
@@ -158,8 +159,7 @@ def load_memory(load_size=150):
             current_action_tensor = torch.tensor([current_action], device=device)
             action = F.one_hot(current_action_tensor, num_classes=36).to(torch.int64)
             # print(action.shape)
-            memory_next_state = torch.tensor(next_state, dtype=torch.float32, device=device)
-            memory.push(current_state_tensor, action, memory_next_state, reward_tensor)
+            memory.push(current_state_tensor, action, next_state_tensor, reward_tensor)
 
             current_state_tensor = next_state_tensor
             current_score = next_score
@@ -298,7 +298,21 @@ for i_episode in range(num_episodes):
     action = select_action(state_tensor)
     game.mouse_click(action)
     game.take_screenshot()
+    new_score = game.get_score()
+
+    if new_score == None:
+        time.sleep(1)
+        game.take_screenshot()
+        new_score = game.get_score()
+        if new_score == None:
+            score = 0
+    reward = (new_score - score) * 10
     
+    if reward > 30:
+        time.sleep(1)
+    elif reward > 100:
+        time.sleep(3)
+
     if(game.is_game_end()):
         next_state_tensor = None
         game.game_number = game.get_next_game_number()
@@ -311,18 +325,6 @@ for i_episode in range(num_episodes):
     else:
         observation, new_next_item = game.get_game_area()
         all_observation = game.slot_with_item(observation, new_next_item)
-        new_score = game.get_score()
-        if new_score == None:
-            game.take_screenshot()
-            new_score = game.get_score()
-            if new_score == None:
-                score = 0
-        reward = (new_score - score) * 10
-
-        if reward > 30:
-            time.sleep(1)
-        elif reward > 100:
-            time.sleep(3)
 
         next_state_tensor = torch.tensor(all_observation, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
         
@@ -339,8 +341,7 @@ for i_episode in range(num_episodes):
         reward_tensor = torch.tensor([reward], device=device)
     
     print("action shape:",action.shape)
-    memory_next_state = torch.tensor(observation, dtype=torch.float32, device=device)
-    memory.push(state_tensor, action.unsqueeze(0), memory_next_state, reward_tensor)
+    memory.push(state_tensor, action.unsqueeze(0), next_state_tensor, reward_tensor)
     print("reward:", reward_tensor.item())
     print("=========================================================")
 

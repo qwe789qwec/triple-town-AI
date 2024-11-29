@@ -19,7 +19,7 @@ class playgame:
         self.save_dir = save_dir
         self.game_number = self.get_next_game_number()
         self.screen_x, self.screen_y = self.get_window_info()
-        self.mouse_x = self.screen_x + 517
+        self.mouse_x = self.screen_x + 533
         self.mouse_y = self.screen_y + 108
 
         self.mouse_game_x = self.screen_x + 70
@@ -159,7 +159,8 @@ class playgame:
                 continue
             else:
                 break
-        next_item = self.latest_image[80:80 + 60, 495:495 + 60]
+
+        next_item = self.latest_image[80:80 + 60, 500:500 + 60]
         next_item_id = self.find_matching_item(next_item)
         return slot_matrix, next_item_id
         # self.save_image(next_item, 37)
