@@ -3,3 +3,4 @@
 /optimizer_parameters.pth
 /policy_net_parameters.pth
 /target_net_parameters.pth
+/__pycache__

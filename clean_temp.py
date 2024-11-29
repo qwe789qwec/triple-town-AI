@@ -57,7 +57,7 @@ def main():
         final_50_results = sorted_results[-50:]
         final_50_paths = {item[0] for item in final_50_results}  # 使用集合方便比对
 
-        protected_files = [f"{i}.png" for i in range(11)]  # 生成保护文件列表
+        protected_files = [f"{i}.png" for i in range(40)]  # 生成保护文件列表
         for image_path in results.keys():
             # 检查文件是否在保护文件列表中
             if os.path.basename(image_path) in protected_files:

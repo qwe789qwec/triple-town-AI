@@ -6,6 +6,10 @@ import numpy as np
 import random
 from collections import namedtuple, deque
 
+import cv2
+import os
+import json
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -33,7 +37,7 @@ LR = 1e-4
 MEMORY_SIZE = 10000
 
 Transition = namedtuple('Transition',
-                        ('state', 'item', 'action', 'next_state', 'reward'))
+                        ('state', 'action', 'next_state', 'reward'))
 
 class ReplayMemory:
     def __init__(self, capacity):
@@ -48,23 +52,39 @@ class ReplayMemory:
     def __len__(self):
         return len(self.memory)
 
+# def save_memory_json(memory, filepath='replay_memory.json'):
+#     data = [transition._asdict() for transition in memory.memory]
+#     with open(filepath, 'w') as f:
+#         json.dump(data, f)
+
+# def load_memory_json(filepath='replay_memory.json'):
+#     with open(filepath, 'r') as f:
+#         data = json.load(f)
+#     loaded_memory = ReplayMemory(len(data))
+#     for item in data:
+#         loaded_memory.push(
+#             torch.tensor(item['state']), 
+#             torch.tensor(item['action']), 
+#             torch.tensor(item['next_state']), 
+#             torch.tensor(item['reward'])
+#         )
+#     return loaded_memory
+
 # define DQN model
 class DQN(nn.Module):
     def __init__(self, board_size):
         super(DQN, self).__init__()
-        self.conv1 = nn.Conv2d(1, board_size, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(1, board_size, kernel_size=3, padding=0)
         self.conv2 = nn.Conv2d(board_size, board_size, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(board_size, board_size, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(board_size * board_size * board_size + 1 , 128)
+        self.fc1 = nn.Linear(5 * 5 * 6, 128)
         self.fc2 = nn.Linear(128, board_size * board_size)
 
-    def forward(self, x, next_element):
+    def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
         x = x.view(x.size(0), -1)
-        next_element = next_element / 25
-        x = torch.cat([x, next_element], dim=1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         
@@ -83,18 +103,83 @@ optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
 # optimizer.load_state_dict(optimizer_save)
 memory = ReplayMemory(10000)
 
-steps_done = 0
-def select_action(state, next_item):
+def load_memory(load_size=150):
+    game_folder = 'gameplay'
+    image_files = sorted(
+        [f for f in os.listdir(game_folder) if f.endswith(('.png', '.jpg', '.jpeg'))],
+        key=lambda f: os.path.getmtime(os.path.join(game_folder, f))
+    )
+    current_state = None
+    for i in range(len(image_files)-1):
+        j = i + 1
+        current = image_files[i]
+        next = image_files[j]
+
+        numbers1 = current.replace("game_", "").replace(".png", "").split("_")
+        current_num1, current_step, current_action = map(int, numbers1)
+        numbers2 = next.replace("game_", "").replace(".png", "").split("_")
+        next_num2, next_step, next_action = map(int, numbers2)
+        print(current)
+
+        if current_num1 == next_num2 and next_step - current_step == 1:
+            if current_state is None:
+                game.latest_image = cv2.imread(os.path.join(game_folder, current))
+                current_state, next_item = game.get_game_area()
+                all_state = game.slot_with_item(current_state, next_item)
+                current_score = game.get_score()
+                current_state_tensor = torch.tensor(all_state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
+
+            game.latest_image = cv2.imread(os.path.join(game_folder, next))
+            next_state, new_next_item = game.get_game_area()
+            all_next_state = game.slot_with_item(next_state, new_next_item)
+            next_score = game.get_score()
+            next_state_tensor = torch.tensor(all_next_state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
+
+            if current_score == None:
+                current_score = 0
+            elif next_score == None:
+                next_score = 0
+            elif np.any(current_state >= 21):
+                print(current, "got 21")
+                current_state = None
+                continue
+            elif np.any(next_state >= 21):
+                print(next, "got 21")
+                current_state = None
+                continue
+
+            reward = (next_score - current_score) * 10
+            if torch.equal(current_state_tensor, next_state_tensor):
+                reward = torch.tensor([-1000], device=device)
+            elif next_action == 0 and current_action == 0:
+                reward = torch.tensor([-1000], device=device)
+            reward_tensor = torch.tensor([reward], device=device)
+
+            current_action_tensor = torch.tensor([current_action], device=device)
+            action = F.one_hot(current_action_tensor, num_classes=36).to(torch.int64)
+            # print(action.shape)
+            memory_next_state = torch.tensor(next_state, dtype=torch.float32, device=device)
+            memory.push(current_state_tensor, action, memory_next_state, reward_tensor)
+
+            current_state_tensor = next_state_tensor
+            current_score = next_score
+        else:
+            current_state = None
+        
+        if len(memory) >= load_size:
+            break
+
+def select_action(all_state):
     global steps_done
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * steps_done / EPS_DECAY)
-    steps_done += 1
+        math.exp(-1. * len(memory) / EPS_DECAY)
+
     if sample > eps_threshold:
         with torch.no_grad():
             # 1. calculate the probability distribution
             print("model")
-            policy_output = policy_net(state, next_item)
+            policy_output = policy_net(all_state)
             probabilities = F.softmax(policy_output.flatten(1), dim=1).view_as(policy_output)
 
     else:
@@ -102,8 +187,10 @@ def select_action(state, next_item):
         print("random")
 
     # 2. create a mask for valid moves
-    valid_moves_mask = torch.flatten(state, start_dim=1).clone().to(device).squeeze(0)
-    if next_item.item() == 17:
+    state_np = all_state.squeeze().cpu().numpy()
+    state, next_item = game.split_result(state_np)
+    valid_moves_mask = torch.flatten(torch.tensor(state)).to(device)
+    if next_item == 17:
         for i in range(36):
             if valid_moves_mask[i] != 0:
                 valid_moves_mask[i] = 1
@@ -140,21 +227,17 @@ def optimize_model():
     # (a final state would've been the one after which simulation ended)
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
                                           batch.next_state)), device=device, dtype=torch.bool)
-    non_final_next_states = torch.cat([s for s, i in zip(batch.next_state, batch.item) 
-                                       if s is not None])
-    non_final_next_items = torch.cat([i for s, i in zip(batch.next_state, batch.item) 
-                                      if s is not None])
-
+    non_final_next_states = torch.cat([s for s in batch.next_state
+                                                if s is not None])
 
     state_batch = torch.cat(batch.state)
-    next_item_batch = torch.cat(batch.item)
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
 
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
     # for each batch state according to policy_net
-    state_action_values = policy_net(state_batch, next_item_batch).gather(1, action_batch)
+    state_action_values = policy_net(state_batch).gather(1, action_batch)
 
     # Compute V(s_{t+1}) for all next states.
     # Expected values of actions for non_final_next_states are computed based
@@ -163,7 +246,7 @@ def optimize_model():
     # state value or 0 in case the state was final.
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
     with torch.no_grad():
-        next_state_values[non_final_mask] = target_net(non_final_next_states, non_final_next_items).max(1).values
+        next_state_values[non_final_mask] = target_net(non_final_next_states).max(1).values
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
@@ -186,54 +269,62 @@ if torch.cuda.is_available() or torch.backends.mps.is_available():
 else:
     num_episodes = 50
 
+load_memory()
+# memory = load_memory_json()
+print("memory length:", len(memory))
 game.take_screenshot()
 state, next_item = game.get_game_area()
-state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
-next_item_tensor = torch.tensor([next_item], dtype=torch.float32, device=device).unsqueeze(0)
-first_run_flag = False
+all_state = game.slot_with_item(state, next_item)
+state_tensor = torch.tensor(all_state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
 old_pos_number = 0
 
 for i_episode in range(num_episodes):
     # Initialize the environment and get its state
-    # gamesc.take_screenshot()
-    # state, next_item = gamesc.get_game_area()
-    print("state:\n", state_tensor)
-    print("next_item:", next_item_tensor.item())
-    # state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
-    # next_item_tensor = torch.tensor([next_item], dtype=torch.float32, device=device).unsqueeze(0)
+
     score = game.get_score()
-    if first_run_flag:
-        score = 0
-        first_run_flag = False
-    # print("score:", score)
-    
-    action = select_action(state_tensor, next_item_tensor)
-    game.mouse_click(action)
+    if score == None:
+        game.take_screenshot()
+        score = game.get_score()
+        if score == None:
+            score = 0
+
+    state_np = state_tensor.squeeze().cpu().numpy()
+    state ,next_item = game.split_result(state_np)
+    print("state:\n", state)
+    print("next_item:", next_item)
+    print("score:", score)
     print("episode:", i_episode)
 
+    action = select_action(state_tensor)
+    game.mouse_click(action)
     game.take_screenshot()
+    
     if(game.is_game_end()):
         next_state_tensor = None
-        # next_item_tensor = None
         game.game_number = game.get_next_game_number()
         new_score = game.get_score() * 10
+        if new_score == None:
+            new_score = game.last_number
         game.step = 0
         game.restart_game()
         reward_tensor = torch.tensor([new_score], device=device)
-        time.sleep(1)
     else:
-        observation, new_item = game.get_game_area()
+        observation, new_next_item = game.get_game_area()
+        all_observation = game.slot_with_item(observation, new_next_item)
         new_score = game.get_score()
+        if new_score == None:
+            game.take_screenshot()
+            new_score = game.get_score()
+            if new_score == None:
+                score = 0
         reward = (new_score - score) * 10
-        # print("old_score:", score)
-        print("new_score:", new_score)
+
         if reward > 30:
-            time.sleep(1.0)
+            time.sleep(1)
         elif reward > 100:
             time.sleep(3)
 
-        next_state_tensor = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
-        new_item_tensor = torch.tensor([new_item], dtype=torch.float32, device=device).unsqueeze(0)
+        next_state_tensor = torch.tensor(all_observation, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
         
         pos = action.max(0).indices
         pos_number = pos.item()
@@ -247,23 +338,24 @@ for i_episode in range(num_episodes):
         old_pos_number = pos_number
         reward_tensor = torch.tensor([reward], device=device)
     
-    memory.push(state_tensor, next_item_tensor, action.unsqueeze(0), next_state_tensor, reward_tensor)
+    print("action shape:",action.shape)
+    memory_next_state = torch.tensor(observation, dtype=torch.float32, device=device)
+    memory.push(state_tensor, action.unsqueeze(0), memory_next_state, reward_tensor)
     print("reward:", reward_tensor.item())
     print("=========================================================")
 
-    if next_state_tensor is None:
-        first_run_flag = True
-        game.take_screenshot()
-        observation, new_item = game.get_game_area()
-        next_state_tensor = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
-        new_item_tensor = torch.tensor([new_item], dtype=torch.float32, device=device).unsqueeze(0)
     state_tensor = next_state_tensor
-    next_item_tensor = new_item_tensor
+    if next_state_tensor is None:
+        game.take_screenshot()
+        state, next_item = game.get_game_area()
+        all_state = game.slot_with_item(state, next_item)
+        state_tensor = torch.tensor(all_state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
 
     if i_episode % 150 == 0:
         torch.save(target_net.state_dict(), "target_net_parameters.pth")
         torch.save(policy_net.state_dict(), "policy_net_parameters.pth")
         torch.save(optimizer.state_dict(), "optimizer_parameters.pth")
+        # save_memory_json(memory)
 
     # Perform one step of the optimization (on the policy network)
     optimize_model()

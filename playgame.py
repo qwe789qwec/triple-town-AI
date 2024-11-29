@@ -118,7 +118,7 @@ class playgame:
         #     self.show_image(thresh_image)
         #     return 0
         if not score:
-            return self.last_number  # return the last known score
+            return None  # return the last known score
         score_str = score[0][1]  # get the first detected text
         try:
             if score_str.count(',') > 0:
@@ -148,8 +148,8 @@ class playgame:
                 index = self.find_matching_item(slot_img)
                 # print(f"slot {slot} matched with item {index}")
                 slot_matrix[col, row] = index
-                if index == 21 and check_time == 0:
-                    time.sleep(1)
+                if index == 21 and check_time <= 1:
+                    time.sleep(1.5)
                     print(f"Invalid index {index} detected. Retrying in 1 seconds...")
                     invalid_detected = True
                     break
@@ -166,6 +166,28 @@ class playgame:
         # game_area = self.latest_image[game_area_y:game_area_y + game_area_h, game_area_x:game_area_x + game_area_w]
         # gray_game_area = cv2.cvtColor(game_area, cv2.COLOR_BGR2GRAY)
         # return game_area
+
+    def slot_with_item(self, slot, item):
+
+        result = np.full((7, 7), -1)
+        result[:3, :3] = slot[:3, :3]   # top_left
+        result[:3, 4:] = slot[:3, 3:]   # top_right
+        result[4:, :3] = slot[3:, :3]   # bottom_left
+        result[4:, 4:] = slot[3:, 3:]   # bottom_right
+        result[3, 3] = item
+
+        return result
+    
+    def split_result(self, result):
+
+        slot_matrix = np.full((6, 6), -1)
+        slot_matrix[:3, :3] = result[:3, :3]
+        slot_matrix[:3, 3:] = result[:3, 4:]
+        slot_matrix[3:, :3] = result[4:, :3]
+        slot_matrix[3:, 3:] = result[4:, 4:]
+        item = result[3, 3]
+
+        return slot_matrix, item
 
     def find_matching_item(self, item_image):
         max_match_value = 0.6
@@ -262,7 +284,7 @@ class playgame:
         pyautogui.click(self.end_x, self.end_y)
         time.sleep(3)
         pyautogui.click(self.start_x, self.start_y)
-        time.sleep(3)
+        time.sleep(5)
 
 # gamesc = GameScreen()
 
