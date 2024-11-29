@@ -160,7 +160,7 @@ class playgame:
             else:
                 break
 
-        next_item = self.latest_image[80:80 + 60, 500:500 + 60]
+        next_item = self.latest_image[85:85 + 60, 508:508 + 60]
         next_item_id = self.find_matching_item(next_item)
         return slot_matrix, next_item_id
         # self.save_image(next_item, 37)
@@ -170,7 +170,7 @@ class playgame:
 
     def slot_with_item(self, slot, item):
 
-        result = np.full((7, 7), -1)
+        result = np.full((7, 7), 0)
         result[:3, :3] = slot[:3, :3]   # top_left
         result[:3, 4:] = slot[:3, 3:]   # top_right
         result[4:, :3] = slot[3:, :3]   # bottom_left

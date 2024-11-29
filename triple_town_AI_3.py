@@ -120,7 +120,7 @@ def load_memory(load_size=150):
         current_num1, current_step, current_action = map(int, numbers1)
         numbers2 = next.replace("game_", "").replace(".png", "").split("_")
         next_num2, next_step, next_action = map(int, numbers2)
-        # print(current)
+        print(current)
 
         if current_num1 == next_num2 and next_step - current_step == 1:
             if current_state is None:
@@ -166,6 +166,7 @@ def load_memory(load_size=150):
         else:
             current_state = None
         
+        print("length =",len(memory))
         if len(memory) >= load_size:
             break
 
@@ -269,7 +270,7 @@ if torch.cuda.is_available() or torch.backends.mps.is_available():
 else:
     num_episodes = 50
 
-load_memory()
+load_memory(1000)
 # memory = load_memory_json()
 print("memory length:", len(memory))
 game.take_screenshot()
