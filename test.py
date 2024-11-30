@@ -32,8 +32,5 @@ tpai = TripleTownAI(
 
 tpai.memory.load_memory()
 
-batch = tpai.memory.random_sample(19)
-
-for transition in batch:
-    print(transition.train_reward)
-    print(transition.reward)
+batch = tpai.memory.sample()
+print("batch length:", len(batch))

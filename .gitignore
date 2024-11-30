@@ -5,3 +5,4 @@
 /target_net_parameters.pth
 /__pycache__
 /triple_town
+/replay_memory.pkl

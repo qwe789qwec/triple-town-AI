@@ -58,6 +58,11 @@ class TripleTownAI:
             current = image_files[i]
             next = image_files[j]
 
+            if current.startswith("game_"):
+                print(current)
+            else:
+                continue
+
             numbers1 = current.replace("game_", "").replace(".png", "").split("_")
             current_num1, current_step, current_action = map(int, numbers1)
             numbers2 = next.replace("game_", "").replace(".png", "").split("_")
@@ -113,6 +118,71 @@ class TripleTownAI:
             if len(self.memory) >= load_size:
                 break
         # return self.memory
+
+    def get_file_info(self, file_name):
+        part_before_game = file_name.split("_info_")[0]
+        part_after_game = file_name.split("_info_")[1]
+
+        game_info = part_before_game.split("_")
+        num, step, action = map(int, game_info)
+
+        split_str = part_after_game.replace(".png", "").split('_')
+        next_item = int(split_str[0])
+        score = int(split_str[1])
+        matrix_elements = list(map(int, split_str[2:]))
+        state = np.array(matrix_elements).reshape(6, 6)
+
+        return num, step, action, next_item, score, state
+
+    def load_new_memory(self, load_size=150, skip=0):
+        game_folder = 'gameplay'
+        print("start load memory")
+        image_files = sorted(
+            [f for f in os.listdir(game_folder) if f.endswith(('.png', '.jpg', '.jpeg'))],
+            key=lambda f: os.path.getmtime(os.path.join(game_folder, f))
+        )
+        
+        for i in range(len(image_files)-1):
+            j = i + 1
+            current = image_files[i]
+            next = image_files[j]
+
+            if current.startswith("game_"):
+                continue
+
+            current_num, current_step, current_action, current_next_item, current_score, current_state = self.get_file_info(current)
+            next_num, next_step, next_action, next_item, next_score, next_state = self.get_file_info(next)
+
+            if current_num < skip:
+                continue
+            if current_num == next_num and next_step - current_step == 1:
+                all_state = self.game.slot_with_item(current_state, current_next_item)
+                current_state_tensor = torch.tensor(all_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
+
+                all_next_state = self.game.slot_with_item(next_state, next_item)
+                next_state_tensor = torch.tensor(all_next_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
+
+                if current_score == None:
+                    current_score = 0
+                elif next_score == None:
+                    next_score = 0
+                elif np.any(current_state >= 21):
+                    print(current, "got 21")
+                    current_state = None
+                    continue
+                elif np.any(next_state >= 21):
+                    print(next, "got 21")
+                    current_state = None
+                    continue
+
+                reward = next_score
+                reward_tensor = torch.tensor([reward], device=self.device)
+
+                current_action_tensor = torch.tensor([current_action], device=self.device)
+                self.memory.push(current_state_tensor, current_action_tensor.unsqueeze(0), next_state_tensor, reward_tensor)
+
+            if len(self.memory) >= load_size:
+                break
 
     def select_action(self, all_state):
         sample = random.random()
@@ -176,7 +246,7 @@ class TripleTownAI:
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.train_reward)
 
-        print("reward_batch:", reward_batch.shape)
+        # print("reward_batch:", reward_batch.shape)
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
