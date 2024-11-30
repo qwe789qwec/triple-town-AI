@@ -4,6 +4,7 @@ import random
 import time
 import cv2
 import os
+import pickle
 
 import torch
 import torch.nn.functional as F
@@ -48,7 +49,7 @@ class TripleTownAI:
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=learning_rate, amsgrad=True)
 
-    def load_memory(self, load_size=150):
+    def load_memory_process(self, load_size=150):
         game_folder = 'gameplay'
         print("start load memory")
         image_files = sorted(
@@ -235,4 +236,19 @@ class TripleTownAI:
         torch.save(self.target_net.state_dict(), "target_net_parameters.pth")
         torch.save(self.policy_net.state_dict(), "policy_net_parameters.pth")
         torch.save(self.optimizer.state_dict(), "optimizer_parameters.pth")
-        # save_memory_json(memory)
+
+    def load_model(self):
+        policy_net_save = torch.load("policy_net_parameters.pth", weights_only=True)
+        target_net_save = torch.load("target_net_parameters.pth", weights_only=True)
+        optimizer_save = torch.load("optimizer_parameters.pth", weights_only=True)
+        self.policy_net.load_state_dict(policy_net_save)
+        self.target_net.load_state_dict(target_net_save)
+        self.optimizer.load_state_dict(optimizer_save)
+
+    def save_memory(self):
+        with open("replay_memory.pkl", 'wb') as f:
+            pickle.dump(self.memory, f)
+
+    def load_memory(self):
+        with open("replay_memory.pkl", 'rb') as f:
+            self.memory = pickle.load(f)

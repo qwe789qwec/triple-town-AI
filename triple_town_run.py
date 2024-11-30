@@ -28,13 +28,6 @@ LOAD_SIZE = 300
 
 game = playgame()
 
-# policy_net_save = torch.load("policy_net_parameters.pth", weights_only=True)
-# target_net_save = torch.load("target_net_parameters.pth", weights_only=True)
-# optimizer_save = torch.load("optimizer_parameters.pth", weights_only=True)
-# policy_net.load_state_dict(policy_net_save)
-# target_net.load_state_dict(target_net_save)
-# optimizer.load_state_dict(optimizer_save)
-
 tpai = TripleTownAI(
     broad_size=BROAD_SIZE,
     batch_size=BATCH_SIZE,
@@ -47,7 +40,9 @@ tpai = TripleTownAI(
     memory_size=MEMORY_SIZE
 )
 
-tpai.load_memory(LOAD_SIZE)
+# tpai.load_model()
+# tpai.load_memory()
+tpai.load_memory_process(LOAD_SIZE)
 
 if torch.cuda.is_available() or torch.backends.mps.is_available():
     num_episodes = 10
@@ -134,5 +129,6 @@ for i_episode in range(num_episodes):
         if next_state_tensor is None:
             break
     tpai.save_model()
+    tpai.save_memory()
 
 print('Complete')
