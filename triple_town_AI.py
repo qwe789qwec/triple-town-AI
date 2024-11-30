@@ -41,15 +41,15 @@ class TripleTownAI:
         self.Transition = self.memory.Transition
         self.game = playgame()
 
-        self.old_score = 0
-        self.top_reward = 0
+        self.old_score = 1
+        self.top_reward = 1
 
         self.policy_net = triple_town_model.DQN(broad_size).to(self.device)
         self.target_net = triple_town_model.DQN(broad_size).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=learning_rate, amsgrad=True)
 
-    def load_memory_process(self, load_size=150):
+    def load_memory_process(self, load_size=150, skip=0):
         game_folder = 'gameplay'
         print("start load memory")
         image_files = sorted(
@@ -68,6 +68,8 @@ class TripleTownAI:
             next_num2, next_step, next_action = map(int, numbers2)
             print(current)
 
+            if current_num1 < skip:
+                continue
             if current_num1 == next_num2 and next_step - current_step == 1:
                 if current_state is None:
                     self.game.latest_image = cv2.imread(os.path.join(game_folder, current))
@@ -115,7 +117,7 @@ class TripleTownAI:
             else:
                 current_state = None
             if current_num1 != next_num2:
-                self.top_reward = 0
+                self.top_reward = 1
             
             print("length =",len(self.memory))
             if len(self.memory) >= load_size:
@@ -177,6 +179,9 @@ class TripleTownAI:
 
         if reward > self.top_reward:
             self.top_reward = reward
+
+        if self.top_reward <= 0:
+            self.top_reward = 1
 
         self.old_score = score
         return reward / self.top_reward

@@ -24,7 +24,8 @@ EPS_DECAY = 1000
 TAU = 0.005
 LR = 1e-4
 MEMORY_SIZE = 10000
-LOAD_SIZE = 300
+LOAD_SIZE = 100
+SKIP_GAME = 0
 
 game = playgame()
 
@@ -42,7 +43,9 @@ tpai = TripleTownAI(
 
 # tpai.load_model()
 # tpai.load_memory()
-tpai.load_memory_process(LOAD_SIZE)
+# tpai.optimize_model()
+tpai.load_memory_process(LOAD_SIZE, SKIP_GAME)
+tpai.save_memory()
 
 if torch.cuda.is_available() or torch.backends.mps.is_available():
     num_episodes = 10

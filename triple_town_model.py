@@ -3,11 +3,12 @@ import torch.nn.functional as F
 from collections import namedtuple, deque
 import random
 
+Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
+
 class ReplayMemory:
     def __init__(self, capacity):
         self.memory = deque(maxlen=capacity)
-        self.Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
+        self.Transition = Transition
     
     def push(self, *args):
         self.memory.append(self.Transition(*args))
