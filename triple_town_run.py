@@ -24,7 +24,7 @@ EPS_DECAY = 1000
 TAU = 0.005
 LR = 1e-4
 MEMORY_SIZE = 10000
-LOAD_SIZE = 150
+LOAD_SIZE = 300
 
 game = playgame()
 
@@ -71,7 +71,8 @@ for i_episode in range(num_episodes):
         score = game.get_score()
         if score == None:
             score = 0
-    tpai.old_reward = score
+    tpai.old_score = score
+    tpai.top_reward = 0
     old_pos_number = 0
 
     for t in count():
@@ -129,6 +130,9 @@ for i_episode in range(num_episodes):
         # Soft update of the target network's weights
         # θ′ ← τ θ + (1 −τ )θ′
         tpai.update_model()
+
+        if next_state_tensor is None:
+            break
     tpai.save_model()
 
 print('Complete')

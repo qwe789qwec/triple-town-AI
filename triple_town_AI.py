@@ -40,7 +40,7 @@ class TripleTownAI:
         self.Transition = self.memory.Transition
         self.game = playgame()
 
-        self.old_reward = 0
+        self.old_score = 0
         self.top_reward = 0
 
         self.policy_net = triple_town_model.DQN(broad_size).to(self.device)
@@ -74,7 +74,7 @@ class TripleTownAI:
                     all_state = self.game.slot_with_item(current_state, next_item)
                     current_score = self.game.get_score()
                     current_state_tensor = torch.tensor(all_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
-                    self.old_reward = current_score
+                    self.old_score = current_score
 
                 self.game.latest_image = cv2.imread(os.path.join(game_folder, next))
                 next_state, new_next_item = self.game.get_game_area()
@@ -113,6 +113,8 @@ class TripleTownAI:
                 current_score = next_score
             else:
                 current_state = None
+            if current_num1 != next_num2:
+                self.top_reward = 0
             
             print("length =",len(self.memory))
             if len(self.memory) >= load_size:
@@ -165,7 +167,7 @@ class TripleTownAI:
     
     def get_reward(self, score):
 
-        reward = score - self.old_reward
+        reward = score - self.old_score
 
         if reward > 30:
             time.sleep(1.5)
@@ -175,6 +177,7 @@ class TripleTownAI:
         if reward > self.top_reward:
             self.top_reward = reward
 
+        self.old_score = score
         return reward / self.top_reward
 
     def optimize_model(self):
