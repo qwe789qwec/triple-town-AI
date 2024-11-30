@@ -103,8 +103,6 @@ class TripleTownAI:
                     reward = torch.tensor([-1], device=self.device)
                 elif next_action == 0 and current_action == 0:
                     reward = torch.tensor([-1], device=self.device)
-                elif current_action == 0:
-                    reward = torch.tensor([-0.1], device=self.device)
                 reward_tensor = torch.tensor([reward], device=self.device)
 
                 current_action_tensor = torch.tensor([current_action], device=self.device)

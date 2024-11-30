@@ -24,7 +24,7 @@ EPS_DECAY = 1000
 TAU = 0.005
 LR = 1e-4
 MEMORY_SIZE = 10000
-LOAD_SIZE = 100
+LOAD_SIZE = 1000
 SKIP_GAME = 0
 
 game = playgame()
@@ -84,7 +84,12 @@ for i_episode in range(num_episodes):
             game.take_screenshot()
             new_score = game.get_score()
             if new_score == None:
-                score = 0
+                new_score = 0
+
+        print("action:", action)
+        print("next_item:", next_item)
+        print("score:", new_score)
+        print("game_step:", t)
 
         if(game.is_game_end()):
             next_state_tensor = None
@@ -103,24 +108,18 @@ for i_episode in range(num_episodes):
                 reward = torch.tensor([-1], device=device)
             elif old_pos_number == action.item():
                 reward = torch.tensor([-1], device=device)
-            elif action.item() == 0:
-                reward = torch.tensor([-0.1], device=device)
 
         old_pos_number = action.item()
         reward_tensor = torch.tensor([reward], device=device)
 
         tpai.memory.push(state_tensor, action.unsqueeze(0).unsqueeze(0), next_state_tensor, reward_tensor)
-        print("reward:", reward_tensor.item())
-        print("=========================================================")
 
         state = observation
         next_item = new_next_item
         state_tensor = next_state_tensor
-
         print("state:\n", state)
-        print("next_item:", next_item)
-        print("score:", score)
-        print("game_step:", t)
+        print("reward:", reward_tensor.item())
+        print("=========================================================")
 
         # Perform one step of the optimization (on the policy network)
         tpai.optimize_model()
