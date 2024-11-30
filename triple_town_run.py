@@ -12,6 +12,7 @@ device = torch.device(
     "mps" if torch.backends.mps.is_available() else
     "cpu"
 )
+
 BROAD_SIZE = 6
 ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
 ITEM_SPACE = 25
@@ -23,6 +24,7 @@ EPS_DECAY = 1000
 TAU = 0.005
 LR = 1e-4
 MEMORY_SIZE = 10000
+LOAD_SIZE = 150
 
 game = playgame()
 
@@ -45,7 +47,7 @@ tpai = TripleTownAI(
     memory_size=MEMORY_SIZE
 )
 
-tpai.load_memory(100)
+tpai.load_memory(LOAD_SIZE)
 
 if torch.cuda.is_available() or torch.backends.mps.is_available():
     num_episodes = 10
@@ -55,7 +57,6 @@ else:
 
 # memory = load_memory_json()
 # print("memory length:", len(memory))
-old_pos_number = 0
 
 for i_episode in range(num_episodes):
     # Initialize the environment and get its state
@@ -63,22 +64,20 @@ for i_episode in range(num_episodes):
     state, next_item = game.get_game_area()
     all_state = game.slot_with_item(state, next_item)
     state_tensor = torch.tensor(all_state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
-
-    for t in count():
+    top_reward = 1
+    score = game.get_score()
+    if score == None:
+        game.take_screenshot()
         score = game.get_score()
         if score == None:
-            game.take_screenshot()
-            score = game.get_score()
-            if score == None:
-                score = 0
+            score = 0
+    tpai.old_reward = score
+    old_pos_number = 0
 
-        print("state:\n", state)
-        print("next_item:", next_item)
-        print("score:", score)
-        print("episode:", i_episode)
+    for t in count():
 
         action = tpai.select_action(state_tensor)
-        game.mouse_click(action)
+        game.mouse_click(action.item())
         game.take_screenshot()
         new_score = game.get_score()
         if new_score == None:
@@ -88,46 +87,41 @@ for i_episode in range(num_episodes):
             if new_score == None:
                 score = 0
 
-        reward = (new_score - score)
-        
-        if reward > 30:
-            time.sleep(1.5)
-        elif reward > 100:
-            time.sleep(4)
-        
-        reward = reward / new_score
-
         if(game.is_game_end()):
             next_state_tensor = None
             game.game_number = game.get_next_game_number()
             game.step = 0
             game.restart_game()
-            new_score = game.last_number
-            reward_tensor = torch.tensor([new_score], device=device)
         else:
             observation, new_next_item = game.get_game_area()
             all_observation = game.slot_with_item(observation, new_next_item)
             next_state_tensor = torch.tensor(all_observation, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
             
-            pos = action.max(0).indices
-            pos_number = pos.item()
+            reward = tpai.get_reward(new_score)
+            # pos = action.max(0).indices
+            # pos_number = pos.item()
             if torch.equal(state_tensor, next_state_tensor):
                 reward = torch.tensor([-1], device=device)
-            elif old_pos_number == pos_number:
+            elif old_pos_number == action.item():
                 reward = torch.tensor([-1], device=device)
-            elif pos_number == 0:
+            elif action.item() == 0:
                 reward = torch.tensor([-0.1], device=device)
 
-        old_pos_number = pos_number
+        old_pos_number = action.item()
         reward_tensor = torch.tensor([reward], device=device)
-    
-        tpai.memory.push(state_tensor, action.unsqueeze(0), next_state_tensor, reward_tensor)
+
+        tpai.memory.push(state_tensor, action.unsqueeze(0).unsqueeze(0), next_state_tensor, reward_tensor)
         print("reward:", reward_tensor.item())
         print("=========================================================")
 
         state = observation
         next_item = new_next_item
         state_tensor = next_state_tensor
+
+        print("state:\n", state)
+        print("next_item:", next_item)
+        print("score:", score)
+        print("game_step:", t)
 
         # Perform one step of the optimization (on the policy network)
         tpai.optimize_model()

@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import random
-
+import time
 import cv2
 import os
 
@@ -40,6 +40,9 @@ class TripleTownAI:
         self.Transition = self.memory.Transition
         self.game = playgame()
 
+        self.old_reward = 0
+        self.top_reward = 0
+
         self.policy_net = triple_town_model.DQN(broad_size).to(self.device)
         self.target_net = triple_town_model.DQN(broad_size).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -71,6 +74,7 @@ class TripleTownAI:
                     all_state = self.game.slot_with_item(current_state, next_item)
                     current_score = self.game.get_score()
                     current_state_tensor = torch.tensor(all_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
+                    self.old_reward = current_score
 
                 self.game.latest_image = cv2.imread(os.path.join(game_folder, next))
                 next_state, new_next_item = self.game.get_game_area()
@@ -91,17 +95,19 @@ class TripleTownAI:
                     current_state = None
                     continue
 
-                reward = (next_score - current_score) * 10
+                reward = self.get_reward(next_score)
                 if torch.equal(current_state_tensor, next_state_tensor):
-                    reward = torch.tensor([-1000], device=self.device)
+                    reward = torch.tensor([-1], device=self.device)
                 elif next_action == 0 and current_action == 0:
-                    reward = torch.tensor([-1000], device=self.device)
+                    reward = torch.tensor([-1], device=self.device)
+                elif current_action == 0:
+                    reward = torch.tensor([-0.1], device=self.device)
                 reward_tensor = torch.tensor([reward], device=self.device)
 
                 current_action_tensor = torch.tensor([current_action], device=self.device)
-                action = F.one_hot(current_action_tensor, num_classes=36).to(torch.int64)
+                # action = F.one_hot(current_action_tensor, num_classes=36).to(torch.int64)
                 # print(action.shape)
-                self.memory.push(current_state_tensor, action, next_state_tensor, reward_tensor)
+                self.memory.push(current_state_tensor, current_action_tensor.unsqueeze(0), next_state_tensor, reward_tensor)
 
                 current_state_tensor = next_state_tensor
                 current_score = next_score
@@ -153,10 +159,24 @@ class TripleTownAI:
 
         # 3. select the best position
         action = torch.argmax(probabilities)
-        print("action:", action.item())
-        action_onehot = F.one_hot(action, num_classes=36).to(torch.int64)
-        return action_onehot
+        # print("action:", action.item())
+        # action_onehot = F.one_hot(action, num_classes=36).to(torch.int64)
+        return action
     
+    def get_reward(self, score):
+
+        reward = score - self.old_reward
+
+        if reward > 30:
+            time.sleep(1.5)
+        elif reward > 100:
+            time.sleep(4)
+
+        if reward > self.top_reward:
+            self.top_reward = reward
+
+        return reward / self.top_reward
+
     def optimize_model(self):
         if len(self.memory) < self.batch_size:
             return
@@ -189,9 +209,6 @@ class TripleTownAI:
             next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1).values
         # Compute the expected Q values
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch
-
-        print("state_action_values.shape:", state_action_values.shape)
-        print("expected_state_action_values.shape:", expected_state_action_values.unsqueeze(1).shape)
 
         # Compute Huber loss
         criterion = nn.SmoothL1Loss()

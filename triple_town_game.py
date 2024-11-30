@@ -254,13 +254,13 @@ class playgame:
             # print("no matching window found!")
             return False
         
-    def mouse_click(self, pos_onehot):
+    def mouse_click(self, pos_number):
         # pos = pos + 1
         # x = pos % 6
         # y = pos // 6
 
-        pos = pos_onehot.max(0).indices
-        pos_number = pos.item()
+        # pos = pos_onehot.max(0).indices
+        # pos_number = pos.item()
         self.save_image(self.latest_image, pos_number)
 
         row, col = divmod(pos_number, 6)

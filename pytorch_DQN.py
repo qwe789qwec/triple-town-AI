@@ -267,7 +267,7 @@ n_actions = env.action_space.n
 state, info = env.reset()
 n_observations = len(state)
 
-print(env.action_space.n)
+print("action space:", env.action_space.n)
 
 policy_net = DQN(n_observations, n_actions).to(device)
 target_net = DQN(n_observations, n_actions).to(device)
@@ -361,6 +361,9 @@ def optimize_model():
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
 
+
+    # print("action_batch.shape:", action_batch.shape)
+
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
     # for each batch state according to policy_net
@@ -376,8 +379,6 @@ def optimize_model():
         next_state_values[non_final_mask] = target_net(non_final_next_states).max(1).values
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
-    print("state_action_values.shape:", state_action_values.shape)
-    print("expected_state_action_values.shape:", expected_state_action_values.unsqueeze(1).shape)
 
     # Compute Huber loss
     criterion = nn.SmoothL1Loss()
@@ -418,6 +419,7 @@ for i_episode in range(num_episodes):
     state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
     for t in count():
         action = select_action(state)
+        print("action shape here: ", action.shape)
         observation, reward, terminated, truncated, _ = env.step(action.item())
         reward = torch.tensor([reward], device=device)
         done = terminated or truncated
