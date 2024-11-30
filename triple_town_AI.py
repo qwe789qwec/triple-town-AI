@@ -1,225 +1,218 @@
-import time
-from playgame import playgame
-import pyautogui
 import math
 import numpy as np
 import random
-from collections import namedtuple, deque
+
+import cv2
+import os
 
 import torch
+import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 
-slot_gap = 80
-game = playgame()
-mouse_init_x = game.screen_x + 70
-mouse_init_y = game.screen_y + 160
+import triple_town_model
+from triple_town_game import playgame
 
-def mouse_click(pos):
-    x = pos % 6
-    y = pos // 6
-    pyautogui.moveTo(mouse_init_x + slot_gap * x, mouse_init_y + slot_gap * y)
-    pyautogui.click()
-    if pos < 12:
-        time.sleep(1.0)
-    time.sleep(0.5)
-
-def restart_game():
-    pyautogui.click(game.end_x, game.end_y)
-    time.sleep(3)
-    pyautogui.click(game.start_x, game.start_y)
-    time.sleep(3)
-
-# while True:
-#     if(gamesc.is_game_end()):
-#         restart_game()
-#         break
-#     gamesc.take_screenshot()
-#     # gamesc.show_image(gamesc.latest_image)
-#     gamesc.save_image(gamesc.latest_image)
-#     random_number = np.random.randint(1, 37)
-#     mouse_click(random_number)
-#     # game_area = gamesc.get_game_area()
-#     # gamesc.save_image(game_area)
-#     print(gamesc.get_score())
-#     time.sleep(1)
-
-
-device = torch.device(
-    "cuda" if torch.cuda.is_available() else
-    "mps" if torch.backends.mps.is_available() else
-    "cpu"
-)
-
-STATE_SHAPE = (3, 512, 512)
-ACTION_SPACE = 36
-BATCH_SIZE = 10
+BROAD_SIZE = 6
+ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
+BATCH_SIZE = 100
 GAMMA = 0.99
 EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 1000
 TAU = 0.005
 LR = 1e-4
-MEMORY_SIZE = 10000
 
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
+class TripleTownAI:
+    def __init__(self, broad_size=BROAD_SIZE, batch_size=BATCH_SIZE, gamma=GAMMA, eps_start=EPS_START, eps_end=EPS_END, eps_decay=EPS_DECAY, tau = TAU, learning_rate = LR, memory_size=10000):
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else
+            "mps" if torch.backends.mps.is_available() else
+            "cpu"
+        )
+        self.batch_size = batch_size
+        self.gamma = gamma
+        self.eps_start = eps_start
+        self.eps_end = eps_end
+        self.eps_decay = eps_decay
+        self.tau = tau
+        self.memory = triple_town_model.ReplayMemory(memory_size)
+        self.Transition = self.memory.Transition
+        self.game = playgame()
 
-class ReplayMemory:
-    def __init__(self, capacity):
-        self.memory = deque(maxlen=capacity)
-    
-    def push(self, *args):
-        self.memory.append(Transition(*args))
-    
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-    
-    def __len__(self):
-        return len(self.memory)
+        self.policy_net = triple_town_model.DQN(broad_size).to(self.device)
+        self.target_net = triple_town_model.DQN(broad_size).to(self.device)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=learning_rate, amsgrad=True)
 
-# define DQN model
-class DQN(nn.Module):
-    def __init__(self, input_shape, action_size):
-        super(DQN, self).__init__()
-        self.conv1 = nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1)
-        self.fc1 = nn.Linear(128* 60 * 60, 512)
-        self.fc2 = nn.Linear(512, action_size)
+    def load_memory(self, load_size=150):
+        game_folder = 'gameplay'
+        print("start load memory")
+        image_files = sorted(
+            [f for f in os.listdir(game_folder) if f.endswith(('.png', '.jpg', '.jpeg'))],
+            key=lambda f: os.path.getmtime(os.path.join(game_folder, f))
+        )
+        current_state = None
+        for i in range(len(image_files)-1):
+            j = i + 1
+            current = image_files[i]
+            next = image_files[j]
 
-    def forward(self, x):
-        x = torch.relu(self.conv1(x))
-        x = torch.relu(self.conv2(x))
-        x = torch.relu(self.conv3(x))
-        x = x.reshape(x.size(0), -1)  # Flatten the output of the conv layers
-        x = torch.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
+            numbers1 = current.replace("game_", "").replace(".png", "").split("_")
+            current_num1, current_step, current_action = map(int, numbers1)
+            numbers2 = next.replace("game_", "").replace(".png", "").split("_")
+            next_num2, next_step, next_action = map(int, numbers2)
+            print(current)
 
-policy_net = DQN(STATE_SHAPE, ACTION_SPACE).to(device)
-target_net = DQN(STATE_SHAPE, ACTION_SPACE).to(device)
-target_net.load_state_dict(policy_net.state_dict())
-optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
-memory = ReplayMemory(10000)
+            if current_num1 == next_num2 and next_step - current_step == 1:
+                if current_state is None:
+                    self.game.latest_image = cv2.imread(os.path.join(game_folder, current))
+                    current_state, next_item = self.game.get_game_area()
+                    all_state = self.game.slot_with_item(current_state, next_item)
+                    current_score = self.game.get_score()
+                    current_state_tensor = torch.tensor(all_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
 
-steps_done = 0
-def select_action(state):
-    global steps_done
-    sample = random.random()
-    eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * steps_done / EPS_DECAY)
-    steps_done += 1
-    if sample > eps_threshold:
-        with torch.no_grad():
-            # t.max(1) will return the largest column value of each row.
-            # second column on max result is index of where max element was
-            # found, so we pick action with the larger expected reward.
-            return policy_net(state)
-    else:
-        action_index = torch.randint(0, 36, (1,), device=device)
-        action_onehot = F.one_hot(action_index, num_classes=36).to(torch.float32)
+                self.game.latest_image = cv2.imread(os.path.join(game_folder, next))
+                next_state, new_next_item = self.game.get_game_area()
+                all_next_state = self.game.slot_with_item(next_state, new_next_item)
+                next_score = self.game.get_score()
+                next_state_tensor = torch.tensor(all_next_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
+
+                if current_score == None:
+                    current_score = 0
+                elif next_score == None:
+                    next_score = 0
+                elif np.any(current_state >= 21):
+                    print(current, "got 21")
+                    current_state = None
+                    continue
+                elif np.any(next_state >= 21):
+                    print(next, "got 21")
+                    current_state = None
+                    continue
+
+                reward = (next_score - current_score) * 10
+                if torch.equal(current_state_tensor, next_state_tensor):
+                    reward = torch.tensor([-1000], device=self.device)
+                elif next_action == 0 and current_action == 0:
+                    reward = torch.tensor([-1000], device=self.device)
+                reward_tensor = torch.tensor([reward], device=self.device)
+
+                current_action_tensor = torch.tensor([current_action], device=self.device)
+                action = F.one_hot(current_action_tensor, num_classes=36).to(torch.int64)
+                # print(action.shape)
+                self.memory.push(current_state_tensor, action, next_state_tensor, reward_tensor)
+
+                current_state_tensor = next_state_tensor
+                current_score = next_score
+            else:
+                current_state = None
+            
+            print("length =",len(self.memory))
+            if len(self.memory) >= load_size:
+                break
+        # return self.memory
+
+    def select_action(self, all_state):
+        sample = random.random()
+        eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+            math.exp(-1. * len(self.memory) / EPS_DECAY)
+
+        if sample > eps_threshold:
+            with torch.no_grad():
+                # 1. calculate the probability distribution
+                print("model")
+                policy_output = self.policy_net(all_state)
+                probabilities = F.softmax(policy_output.flatten(1), dim=1).view_as(policy_output)
+
+        else:
+            probabilities = torch.rand(36).to(self.device)
+            print("random")
+
+        # 2. create a mask for valid moves
+        state_np = all_state.squeeze().cpu().numpy()
+        state, next_item = self.game.split_result(state_np)
+        valid_moves_mask = torch.flatten(torch.tensor(state)).to(self.device)
+        if next_item == 17:
+            for i in range(36):
+                if valid_moves_mask[i] != 0:
+                    valid_moves_mask[i] = 1
+                else:
+                    valid_moves_mask[i] = 0
+        else:
+            for i in range(36):
+                if valid_moves_mask[i] == 0:
+                    valid_moves_mask[i] = 1
+                else:
+                    valid_moves_mask[i] = 0
+        valid_moves_mask[0] = 1  # the first position is always valid
+
+        # filter out invalid moves
+        probabilities *= valid_moves_mask
+        probabilities /= probabilities.sum()
+
+        # 3. select the best position
+        action = torch.argmax(probabilities)
+        print("action:", action.item())
+        action_onehot = F.one_hot(action, num_classes=36).to(torch.int64)
         return action_onehot
-
-def optimize_model():
-    if len(memory) < BATCH_SIZE:
-        return
-    transitions = memory.sample(BATCH_SIZE)
-    # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-    # detailed explanation). This converts batch-array of Transitions
-    # to Transition of batch-arrays.
-    batch = Transition(*zip(*transitions))
-
-    # Compute a mask of non-final states and concatenate the batch elements
-    # (a final state would've been the one after which simulation ended)
-    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                          batch.next_state)), device=device, dtype=torch.bool)
-    non_final_next_states = torch.cat([s for s in batch.next_state
-                                                if s is not None])
-    state_batch = torch.cat(batch.state)
-    action_batch = torch.cat(batch.action).unsqueeze(0)
-    # action_batch = action_batch.long()
-    print("PP:", policy_net(state_batch).shape,"aa:", action_batch.shape)
-    reward_batch = torch.cat(batch.reward)
-
-    # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-    # columns of actions taken. These are the actions which would've been taken
-    # for each batch state according to policy_net
-    state_action_values = policy_net(state_batch).gather(1, action_batch)
-
-    # Compute V(s_{t+1}) for all next states.
-    # Expected values of actions for non_final_next_states are computed based
-    # on the "older" target_net; selecting their best reward with max(1).values
-    # This is merged based on the mask, such that we'll have either the expected
-    # state value or 0 in case the state was final.
-    next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    with torch.no_grad():
-        next_state_values[non_final_mask] = target_net(non_final_next_states).max(1).values
-    # Compute the expected Q values
-    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
-
-    # Compute Huber loss
-    criterion = nn.SmoothL1Loss()
-    loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
-
-    # Optimize the model
-    optimizer.zero_grad()
-    loss.backward()
-    # In-place gradient clipping
-    torch.nn.utils.clip_grad_value_(policy_net.parameters(), 100)
-    optimizer.step()
-
-
-
-if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 600
-    torch.cuda.empty_cache()
-else:
-    num_episodes = 50
     
-for i_episode in range(num_episodes):
-    # Initialize the environment and get its state
-    game.take_screenshot()
-    state = game.get_game_area()
-    score = game.get_score()
-    state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-    state = state.permute(0, 3, 1, 2)
-    # print(state.shape)
+    def optimize_model(self):
+        if len(self.memory) < self.batch_size:
+            return
+        transitions = self.memory.sample(self.batch_size)
+        batch = self.Transition(*zip(*transitions))
 
-    action_onehot = select_action(state)
-    action = action_onehot.max(1).indices
-    action_number = action.item()
-    game.save_image(game.latest_image, action_number)
-    mouse_click(action_number)
-    observation = game.get_game_area()
-    new_score = game.get_score()
-    reward = new_score - score
-    if(game.is_game_end()):
-        terminated = True
-        restart_game()
-    else:
-        terminated = False
-    reward = torch.tensor([reward], device=device)
+        # Compute a mask of non-final states and concatenate the batch elements
+        # (a final state would've been the one after which simulation ended)
+        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                            batch.next_state)), device=self.device, dtype=torch.bool)
+        non_final_next_states = torch.cat([s for s in batch.next_state
+                                                    if s is not None])
 
-    if terminated:
-        next_state = None
-    else:
-        next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
-        next_state = next_state.permute(0, 3, 1, 2)
+        state_batch = torch.cat(batch.state)
+        action_batch = torch.cat(batch.action)
+        reward_batch = torch.cat(batch.reward)
 
-    memory.push(state, action, next_state, reward)
-    state = next_state
+        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+        # columns of actions taken. These are the actions which would've been taken
+        # for each batch state according to policy_net
+        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
-    # Perform one step of the optimization (on the policy network)
-    optimize_model()
+        # Compute V(s_{t+1}) for all next states.
+        # Expected values of actions for non_final_next_states are computed based
+        # on the "older" target_net; selecting their best reward with max(1).values
+        # This is merged based on the mask, such that we'll have either the expected
+        # state value or 0 in case the state was final.
+        next_state_values = torch.zeros(self.batch_size, device=self.device)
+        with torch.no_grad():
+            next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1).values
+        # Compute the expected Q values
+        expected_state_action_values = (next_state_values * self.gamma) + reward_batch
 
-    # Soft update of the target network's weights
-    # θ′ ← τ θ + (1 −τ )θ′
-    target_net_state_dict = target_net.state_dict()
-    policy_net_state_dict = policy_net.state_dict()
-    for key in policy_net_state_dict:
-        target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
-    target_net.load_state_dict(target_net_state_dict)
+        print("state_action_values.shape:", state_action_values.shape)
+        print("expected_state_action_values.shape:", expected_state_action_values.unsqueeze(1).shape)
 
-print('Complete')
+        # Compute Huber loss
+        criterion = nn.SmoothL1Loss()
+        loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+
+        # Optimize the model
+        self.optimizer.zero_grad()
+        loss.backward()
+        # In-place gradient clipping
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
+        self.optimizer.step()
+
+    def update_model(self):
+        target_net_state_dict = self.target_net.state_dict()
+        policy_net_state_dict = self.policy_net.state_dict()
+        for key in policy_net_state_dict:
+            target_net_state_dict[key] = policy_net_state_dict[key]*self.tau + target_net_state_dict[key]*(1-self.tau)
+        self.target_net.load_state_dict(target_net_state_dict)
+
+    def save_model(self):
+        torch.save(self.target_net.state_dict(), "target_net_parameters.pth")
+        torch.save(self.policy_net.state_dict(), "policy_net_parameters.pth")
+        torch.save(self.optimizer.state_dict(), "optimizer_parameters.pth")
+        # save_memory_json(memory)

@@ -267,6 +267,8 @@ n_actions = env.action_space.n
 state, info = env.reset()
 n_observations = len(state)
 
+print(env.action_space.n)
+
 policy_net = DQN(n_observations, n_actions).to(device)
 target_net = DQN(n_observations, n_actions).to(device)
 target_net.load_state_dict(policy_net.state_dict())
@@ -374,6 +376,8 @@ def optimize_model():
         next_state_values[non_final_mask] = target_net(non_final_next_states).max(1).values
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+    print("state_action_values.shape:", state_action_values.shape)
+    print("expected_state_action_values.shape:", expected_state_action_values.unsqueeze(1).shape)
 
     # Compute Huber loss
     criterion = nn.SmoothL1Loss()
@@ -425,6 +429,11 @@ for i_episode in range(num_episodes):
 
         # Store the transition in memory
         memory.push(state, action, next_state, reward)
+
+        # print("state: ", state)
+        # print("action: ", action)
+        # print("next_state: ", next_state)
+        # print("reward: ", reward)
 
         # Move to the next state
         state = next_state

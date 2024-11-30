@@ -1,5 +1,5 @@
 import time
-from playgame import playgame
+from triple_town_game import playgame
 import pyautogui
 import math
 import numpy as np

@@ -91,6 +91,9 @@ class playgame:
         filename = f"game_{self.game_number}_{self.step}_{action}.png"
         pil_image.save(os.path.join(self.save_dir, filename))
 
+    def load_image(self, filename):
+        self.latest_image = cv2.imread(filename)
+
     def show_image(self, image):
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         cv2.imshow('game', image_rgb)
@@ -142,16 +145,14 @@ class playgame:
                 slot_x, slot_y = self.slot_region(row, col)
                 slot_img = self.latest_image[slot_y:slot_y + self.slot_size, slot_x:slot_x + self.slot_size]
                 index = self.find_matching_item(slot_img)
-                if index >= 21 and check_time < 2:
-                    print(f"get item 21 the {check_time} time to check")
+                slot_matrix[col, row] = index
+                if index == 21 and check_time < 2:
+                    print(f"get item {index} the {check_time} time to check")
                     time.sleep(1.5)
                     self.take_screenshot()
                     check_time += 1
                     break
-                slot_matrix[col, row] = index
-            if check_time == 2:
-                break
-            elif index >= 21:
+            if index >= 21:
                 continue
             else:
                 break
@@ -173,7 +174,7 @@ class playgame:
     
     def split_result(self, result):
 
-        slot_matrix = np.full((6, 6), -1)
+        slot_matrix = np.full((6, 6), 0)
         slot_matrix[:3, :3] = result[:3, :3]
         slot_matrix[:3, 3:] = result[:3, 4:]
         slot_matrix[3:, :3] = result[4:, :3]
@@ -278,9 +279,9 @@ class playgame:
 
 # gamesc = playgame()
 # gamesc.take_screenshot()
-# gamesc.latest_image = cv2.imread('gameplay/game_3_20_0.png')
+# gamesc.latest_image = cv2.imread('gameplay/game_2_1_18.png')
 # gamesc.save_image(gamesc.latest_image, 12)
 # state , next_item = gamesc.get_game_area()
-# print(state)
-# print(next_item)
+# print("state:\n", state)
+# print("next_item:", next_item)
 # print(gamesc.get_score())

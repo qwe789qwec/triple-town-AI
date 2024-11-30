@@ -1,5 +1,5 @@
 import time
-from playgame import playgame
+from triple_town_game import playgame
 import pyautogui
 import math
 import numpy as np
@@ -270,9 +270,9 @@ if torch.cuda.is_available() or torch.backends.mps.is_available():
 else:
     num_episodes = 50
 
-load_memory(1000)
+# load_memory(1000)
 # memory = load_memory_json()
-print("memory length:", len(memory))
+# print("memory length:", len(memory))
 game.take_screenshot()
 state, next_item = game.get_game_area()
 all_state = game.slot_with_item(state, next_item)
