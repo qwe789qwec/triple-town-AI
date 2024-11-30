@@ -4,7 +4,6 @@ import random
 import time
 import cv2
 import os
-import pickle
 
 import torch
 import torch.nn.functional as F
@@ -38,11 +37,8 @@ class TripleTownAI:
         self.eps_decay = eps_decay
         self.tau = tau
         self.memory = triple_town_model.ReplayMemory(memory_size)
-        self.Transition = self.memory.Transition
+        self.Transition = self.memory.EnhancedTransition
         self.game = playgame()
-
-        self.old_score = 1
-        self.top_reward = 1
 
         self.policy_net = triple_town_model.DQN(broad_size).to(self.device)
         self.target_net = triple_town_model.DQN(broad_size).to(self.device)
@@ -98,11 +94,7 @@ class TripleTownAI:
                     current_state = None
                     continue
 
-                reward = self.get_reward(next_score)
-                if torch.equal(current_state_tensor, next_state_tensor):
-                    reward = torch.tensor([-1], device=self.device)
-                elif next_action == 0 and current_action == 0:
-                    reward = torch.tensor([-1], device=self.device)
+                reward = next_score
                 reward_tensor = torch.tensor([reward], device=self.device)
 
                 current_action_tensor = torch.tensor([current_action], device=self.device)
@@ -165,29 +157,12 @@ class TripleTownAI:
         # print("action:", action.item())
         # action_onehot = F.one_hot(action, num_classes=36).to(torch.int64)
         return action
-    
-    def get_reward(self, score):
-
-        reward = score - self.old_score
-
-        if reward > 30:
-            time.sleep(1.5)
-        elif reward > 100:
-            time.sleep(4)
-
-        if reward > self.top_reward:
-            self.top_reward = reward
-
-        if self.top_reward <= 0:
-            self.top_reward = 1
-
-        self.old_score = score
-        return reward / self.top_reward
 
     def optimize_model(self):
         if len(self.memory) < self.batch_size:
             return
-        transitions = self.memory.sample(self.batch_size)
+        
+        transitions = self.memory.random_sample(self.batch_size)
         batch = self.Transition(*zip(*transitions))
 
         # Compute a mask of non-final states and concatenate the batch elements
@@ -199,7 +174,9 @@ class TripleTownAI:
 
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
+        reward_batch = torch.cat(batch.train_reward)
+
+        print("reward_batch:", reward_batch.shape)
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
@@ -247,11 +224,3 @@ class TripleTownAI:
         self.policy_net.load_state_dict(policy_net_save)
         self.target_net.load_state_dict(target_net_save)
         self.optimizer.load_state_dict(optimizer_save)
-
-    def save_memory(self):
-        with open("replay_memory.pkl", 'wb') as f:
-            pickle.dump(self.memory, f)
-
-    def load_memory(self):
-        with open("replay_memory.pkl", 'rb') as f:
-            self.memory = pickle.load(f)

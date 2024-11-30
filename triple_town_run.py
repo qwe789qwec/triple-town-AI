@@ -16,11 +16,11 @@ device = torch.device(
 BROAD_SIZE = 6
 ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
 ITEM_SPACE = 25
-BATCH_SIZE = 100
+BATCH_SIZE = 200
 GAMMA = 0.99
 EPS_START = 0.9
 EPS_END = 0.05
-EPS_DECAY = 1000
+EPS_DECAY = 10
 TAU = 0.005
 LR = 1e-4
 MEMORY_SIZE = 10000
@@ -42,10 +42,10 @@ tpai = TripleTownAI(
 )
 
 # tpai.load_model()
-# tpai.load_memory()
+# tpai.memory.load_memory()
 # tpai.optimize_model()
 tpai.load_memory_process(LOAD_SIZE, SKIP_GAME)
-tpai.save_memory()
+tpai.memory.save_memory()
 
 if torch.cuda.is_available() or torch.backends.mps.is_available():
     num_episodes = 10
@@ -69,8 +69,6 @@ for i_episode in range(num_episodes):
         score = game.get_score()
         if score == None:
             score = 0
-    tpai.old_score = score
-    tpai.top_reward = 0
     old_pos_number = 0
 
     for t in count():
@@ -86,7 +84,7 @@ for i_episode in range(num_episodes):
             if new_score == None:
                 new_score = 0
 
-        print("action:", action)
+        print("action:", action.item())
         print("next_item:", next_item)
         print("score:", new_score)
         print("game_step:", t)
@@ -101,13 +99,13 @@ for i_episode in range(num_episodes):
             all_observation = game.slot_with_item(observation, new_next_item)
             next_state_tensor = torch.tensor(all_observation, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
             
-            reward = tpai.get_reward(new_score)
-            # pos = action.max(0).indices
-            # pos_number = pos.item()
-            if torch.equal(state_tensor, next_state_tensor):
-                reward = torch.tensor([-1], device=device)
-            elif old_pos_number == action.item():
-                reward = torch.tensor([-1], device=device)
+        reward = new_score
+        # pos = action.max(0).indices
+        # pos_number = pos.item()
+        if torch.equal(state_tensor, next_state_tensor):
+            reward = torch.tensor([-1], device=device)
+        elif old_pos_number == 0 and action.item() == 0:
+            reward = torch.tensor([-1], device=device)
 
         old_pos_number = action.item()
         reward_tensor = torch.tensor([reward], device=device)
@@ -131,6 +129,6 @@ for i_episode in range(num_episodes):
         if next_state_tensor is None:
             break
     tpai.save_model()
-    tpai.save_memory()
+    tpai.memory.save_memory()
 
 print('Complete')

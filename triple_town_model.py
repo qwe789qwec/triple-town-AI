@@ -1,21 +1,60 @@
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import namedtuple, deque
+import pickle
 import random
 
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
+EnhancedTransition = namedtuple('EnhancedTransition', Transition._fields + ('train_reward',))
 
 class ReplayMemory:
     def __init__(self, capacity):
         self.memory = deque(maxlen=capacity)
         self.Transition = Transition
+        self.EnhancedTransition = EnhancedTransition
     
     def push(self, *args):
-        self.memory.append(self.Transition(*args))
+        self.memory.append(Transition(*args))
     
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
+    def random_sample(self, batch_size):
+        batch = self.enhanced_sample()
+        return random.sample(batch, batch_size)
     
+    def sample(self):
+        return self.memory
+    
+    def enhanced_sample(self):
+        batch = list(self.memory)
+        enhanced_batch = []
+
+        old_gap = 100
+        factor = 1
+
+        for i in reversed(range(len(batch))):
+            if i == 0:
+                break
+            
+            gap = batch[i].reward - batch[i-1].reward
+
+            if gap > old_gap:
+                old_gap = gap
+                factor = 1
+
+            train_reward = gap/old_gap * factor
+            factor *= 0.9
+
+            enhanced_transition = EnhancedTransition(*batch[i], train_reward)
+            enhanced_batch.append(enhanced_transition)
+        return enhanced_batch
+    
+    def save_memory(self):
+        with open("replay_memory.pkl", 'wb') as f:
+            pickle.dump(self.memory, f)
+
+    def load_memory(self):
+        with open("replay_memory.pkl", 'rb') as f:
+            self.memory = pickle.load(f)
+
     def __len__(self):
         return len(self.memory)
 

@@ -1,18 +1,39 @@
-i = 0
-should_exit = False
+from triple_town_AI import TripleTownAI
+from collections import namedtuple, deque
 
-while i < 6:
-    print(f"Before increment: {i}")
-    if i == 5:
-        print("Marking for exit!")
-        should_exit = True
-        i += 1
-        continue
-    i += 1
-    print(f"After increment: {i}")
+BROAD_SIZE = 6
+ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
+ITEM_SPACE = 25
+BATCH_SIZE = 10
+GAMMA = 0.99
+EPS_START = 0.9
+EPS_END = 0.05
+EPS_DECAY = 10
+TAU = 0.005
+LR = 1e-4
+MEMORY_SIZE = 10000
+LOAD_SIZE = 20
+SKIP_GAME = 0
 
-    if should_exit:
-        print("Exiting the loop!")
-        break
+Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
+EnhancedTransition = namedtuple('EnhancedTransition', Transition._fields + ('train_reward',))
 
-print("Loop finished.")
+tpai = TripleTownAI(
+    broad_size=BROAD_SIZE,
+    batch_size=BATCH_SIZE,
+    gamma=GAMMA,
+    eps_start=EPS_START,
+    eps_end=EPS_END,
+    eps_decay=EPS_DECAY,
+    tau=TAU,
+    learning_rate=LR,
+    memory_size=MEMORY_SIZE
+)
+
+tpai.memory.load_memory()
+
+batch = tpai.memory.random_sample(19)
+
+for transition in batch:
+    print(transition.train_reward)
+    print(transition.reward)
