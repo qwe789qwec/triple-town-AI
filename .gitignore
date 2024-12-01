@@ -1,5 +1,6 @@
 /gameplay
 /item_template
+/arrange
 /optimizer_parameters.pth
 /policy_net_parameters.pth
 /target_net_parameters.pth
