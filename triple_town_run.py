@@ -16,7 +16,7 @@ device = torch.device(
 BROAD_SIZE = 6
 ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
 ITEM_SPACE = 25
-BATCH_SIZE = 100
+BATCH_SIZE = 300
 GAMMA = 0.99
 EPS_START = 0.9
 EPS_END = 0.05
@@ -45,10 +45,10 @@ tpai = TripleTownAI(
 # tpai.memory.load_memory()
 # tpai.optimize_model()
 tpai.load_new_memory(LOAD_SIZE, SKIP_GAME)
-tpai.memory.save_memory()
+# tpai.memory.save_memory()
 
 if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 10
+    num_episodes = 20
     torch.cuda.empty_cache()
 else:
     num_episodes = 3
@@ -123,6 +123,6 @@ for i_episode in range(num_episodes):
         if next_state_tensor is None:
             break
     tpai.save_model()
-    tpai.memory.save_memory()
+    # tpai.memory.save_memory()
 
 print('Complete')

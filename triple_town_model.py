@@ -40,8 +40,8 @@ class ReplayMemory:
                 old_gap = gap
                 factor = 1
 
-            train_reward = gap/old_gap * factor
-            factor *= 0.9
+            train_reward = gap * factor
+            factor *= 0.5
 
             enhanced_transition = EnhancedTransition(*batch[i], train_reward)
             enhanced_batch.append(enhanced_transition)

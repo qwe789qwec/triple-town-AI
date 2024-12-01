@@ -15,7 +15,7 @@ from triple_town_game import playgame
 
 BROAD_SIZE = 6
 ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
-BATCH_SIZE = 100
+BATCH_SIZE = 300
 GAMMA = 0.99
 EPS_START = 0.9
 EPS_END = 0.05
