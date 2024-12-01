@@ -2,6 +2,7 @@ import time
 from itertools import count
 
 import torch
+import torch.nn.functional as F
 
 import triple_town_model
 from triple_town_AI import TripleTownAI
@@ -15,7 +16,7 @@ device = torch.device(
 
 BROAD_SIZE = 6
 ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
-ITEM_SPACE = 25
+ITEM_TYPE = 21
 BATCH_SIZE = 300
 GAMMA = 0.99
 EPS_START = 0.9
@@ -24,12 +25,13 @@ EPS_DECAY = 10
 TAU = 0.005
 LR = 1e-4
 MEMORY_SIZE = 10000
-LOAD_SIZE = 150
+LOAD_SIZE = 10000
 SKIP_GAME = 0
 
 game = playgame()
 
 tpai = TripleTownAI(
+    item_type=ITEM_TYPE,
     broad_size=BROAD_SIZE,
     batch_size=BATCH_SIZE,
     gamma=GAMMA,
@@ -46,6 +48,14 @@ tpai = TripleTownAI(
 # tpai.optimize_model()
 tpai.load_new_memory(LOAD_SIZE, SKIP_GAME)
 # tpai.memory.save_memory()
+print("memory length:", len(tpai.memory.sample()))
+
+if len(tpai.memory.sample()) > BATCH_SIZE:
+    for i in range(len(tpai.memory.sample())-BATCH_SIZE):
+        tpai.optimize_model()
+        tpai.update_model()
+print("finish optimize model and update model")
+tpai.save_model()
 
 if torch.cuda.is_available() or torch.backends.mps.is_available():
     num_episodes = 20

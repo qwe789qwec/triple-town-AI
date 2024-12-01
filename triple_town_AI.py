@@ -13,6 +13,7 @@ import torch.optim as optim
 import triple_town_model
 from triple_town_game import playgame
 
+ITEM_TYPE = 21
 BROAD_SIZE = 6
 ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
 BATCH_SIZE = 300
@@ -24,7 +25,17 @@ TAU = 0.005
 LR = 1e-4
 
 class TripleTownAI:
-    def __init__(self, broad_size=BROAD_SIZE, batch_size=BATCH_SIZE, gamma=GAMMA, eps_start=EPS_START, eps_end=EPS_END, eps_decay=EPS_DECAY, tau = TAU, learning_rate = LR, memory_size=10000):
+    def __init__(self, 
+                 item_type = ITEM_TYPE,
+                 broad_size=BROAD_SIZE, 
+                 batch_size=BATCH_SIZE, 
+                 gamma=GAMMA, 
+                 eps_start=EPS_START, 
+                 eps_end=EPS_END, 
+                 eps_decay=EPS_DECAY, 
+                 tau = TAU, 
+                 learning_rate = LR, 
+                 memory_size=10000):
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else
             "mps" if torch.backends.mps.is_available() else
@@ -40,8 +51,8 @@ class TripleTownAI:
         self.Transition = self.memory.EnhancedTransition
         self.game = playgame()
 
-        self.policy_net = triple_town_model.DQN(broad_size).to(self.device)
-        self.target_net = triple_town_model.DQN(broad_size).to(self.device)
+        self.policy_net = triple_town_model.DQN(item_type ,broad_size).to(self.device)
+        self.target_net = triple_town_model.DQN(item_type ,broad_size).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=learning_rate, amsgrad=True)
 
@@ -149,7 +160,9 @@ class TripleTownAI:
 
             if current.startswith("game_"):
                 continue
-
+            if next.startswith("game_"):
+                continue
+            # print(current)
             current_num, current_step, current_action, current_next_item, current_score, current_state = self.get_file_info(current)
             next_num, next_step, next_action, next_item, next_score, next_state = self.get_file_info(next)
 
@@ -193,7 +206,10 @@ class TripleTownAI:
             with torch.no_grad():
                 # 1. calculate the probability distribution
                 print("model")
-                policy_output = self.policy_net(all_state)
+                state_long = all_state.squeeze().long()
+                state_one_hot = F.one_hot(state_long, num_classes=ITEM_TYPE)
+                state_one_hot = state_one_hot.permute(2, 0, 1)
+                policy_output = self.policy_net(state_one_hot.unsqueeze(0).float())
                 probabilities = F.softmax(policy_output.flatten(1), dim=1).view_as(policy_output)
 
         else:
