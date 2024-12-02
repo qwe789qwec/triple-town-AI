@@ -13,7 +13,7 @@ import torch.optim as optim
 import triple_town_model
 from triple_town_game import playgame
 
-ITEM_TYPE = 21
+ITEM_TYPE = 22
 BROAD_SIZE = 6
 ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
 BATCH_SIZE = 300
@@ -207,6 +207,7 @@ class TripleTownAI:
                 state_one_hot = F.one_hot(state_long, num_classes=ITEM_TYPE)
                 state_one_hot = state_one_hot.permute(2, 0, 1)
                 policy_output = self.policy_net(state_one_hot.unsqueeze(0).float())
+                print(policy_output.shape)
                 probabilities = F.softmax(policy_output.flatten(1), dim=1).view_as(policy_output)
 
         else:

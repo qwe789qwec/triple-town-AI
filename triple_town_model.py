@@ -14,7 +14,7 @@ device = torch.device(
     "cpu"
 )
 
-ITEM_TYPE = 21
+ITEM_TYPE = 22
 BROAD_SIZE = 6
 
 class ReplayMemory:
