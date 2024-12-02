@@ -6,7 +6,7 @@ import cv2
 import os
 from triple_town_game import playgame
 
-game_folder = 'arrange'
+game_folder = 'gameplay'
 image_files = sorted(
     [f for f in os.listdir(game_folder) if f.endswith(('.png', '.jpg', '.jpeg'))],
     key=lambda f: os.path.getmtime(os.path.join(game_folder, f))

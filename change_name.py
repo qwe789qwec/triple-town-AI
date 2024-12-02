@@ -6,7 +6,7 @@ import cv2
 import os
 from triple_town_game import playgame
 
-game_folder = 'arrange'
+game_folder = 'gameplay'
 image_files = sorted(
     [f for f in os.listdir(game_folder) if f.endswith(('.png', '.jpg', '.jpeg'))],
     key=lambda f: os.path.getmtime(os.path.join(game_folder, f))
@@ -16,7 +16,7 @@ current_state = None
 game = playgame()
 
 for image_file in image_files:
-    if image_file.startswith("game_67"):
+    if image_file.startswith("game_5"):
         print(image_file)
     else:
         continue
@@ -25,8 +25,8 @@ for image_file in image_files:
     game_info = game_info.split("_")
     num, step, action = map(int, game_info)
     action_str = str(action) + ".png"
-    num = num - 2
-    step = step + 41
+    num = num - 1
+    step = step + 35
     new_name = "_".join(["game", str(num), str(step), action_str])
 
     print(new_name)
