@@ -4,7 +4,7 @@ import heapq
 from tqdm import tqdm
 from skimage.metrics import structural_similarity as compare_ssim
 
-folder_path = "item_template/4" # image folder path
+folder_path = "item_template/0" # image folder path
 protected_number = 20 # protected file number
 last_n = 120 # last n images
 
