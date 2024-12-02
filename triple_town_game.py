@@ -2,6 +2,7 @@ import pyautogui
 import time
 import os
 import cv2
+from skimage.metrics import structural_similarity as compare_ssim
 import numpy as np
 from PIL import Image
 import easyocr
@@ -134,33 +135,29 @@ class playgame:
         slot_x = 70 + self.slot_gap * pos_x - (self.slot_size / 2)
         slot_y = 160 + self.slot_gap * pos_y - (self.slot_size / 2)
         return int(slot_x), int(slot_y)
+    
+    def get_game_area(self, take_screenshot=True):
+        max_retries = 3
+        slot_matrix = np.full((6, 6), -1)
 
-
-    def get_game_area(self):
-        check_time = 0
-        while check_time < 3:
-            slot_matrix = np.full((6, 6), -1)
-            for slot in range(36):
-                row, col = divmod(slot, 6)
-                slot_x, slot_y = self.slot_region(row, col)
+        for slot in range(36):
+            row, col = divmod(slot, 6)
+            slot_x, slot_y = self.slot_region(row, col)
+            retry_count = 0
+            
+            while retry_count < max_retries:
                 slot_img = self.latest_image[slot_y:slot_y + self.slot_size, slot_x:slot_x + self.slot_size]
                 index = self.find_matching_item(slot_img)
-                if index >= 21 and check_time < 2:
-                    print(f"get item {index} the {check_time} time to check")
-                    time.sleep(1.5)
-                    self.take_screenshot()
-                    break
                 if index >= 21:
-                    slot_matrix[col, row] = 22
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        slot_matrix[col, row] = 21
+                        if take_screenshot:
+                            time.sleep(1)
+                            self.take_screenshot()
                 else:
                     slot_matrix[col, row] = index
-            if check_time == 3:
-                break
-            elif index >= 21:
-                check_time += 1
-                continue
-            else:
-                break
+                    break
 
         next_item = self.latest_image[85:85 + 60, 508:508 + 60]
         next_item_id = self.find_matching_item(next_item)
@@ -202,14 +199,12 @@ class playgame:
                     template_image = cv2.imread(template_image_path, cv2.IMREAD_GRAYSCALE)
                     if template_image is None:
                         continue
+                    score, _ = compare_ssim(item_image_gray, template_image, full=True)
                     
-                    result = cv2.matchTemplate(item_image_gray, template_image, cv2.TM_CCOEFF_NORMED)
-                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                    
-                    if max_val > max_match_value:
-                        max_match_value = max_val
+                    if score > max_match_value:
+                        max_match_value = score
                         matching_item_id = item_folder
-                    if max_val > 0.8 and matching_item_id is not None:
+                    if score > 0.8 and matching_item_id is not None:
                         if not template_file.startswith("0_"):
                             new_name = f"0_{template_file}"
                             new_path = os.path.join(item_folder_path, new_name)

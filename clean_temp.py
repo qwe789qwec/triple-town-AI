@@ -2,77 +2,84 @@ import os
 import cv2
 import heapq
 from tqdm import tqdm
+from skimage.metrics import structural_similarity as compare_ssim
+
+folder_path = "item_template/0" # image folder path
+protected_number = 40 # protected file number
+last_n = 50 # last n images
 
 def calculate_similarity(img1_path, img2_path):
-    target_image = cv2.imread(img1_path, cv2.IMREAD_GRAYSCALE)
-    compare_image = cv2.imread(img2_path, cv2.IMREAD_GRAYSCALE)
-    if target_image is None or compare_image is None:
-        return 0
-    result = cv2.matchTemplate(target_image, compare_image, cv2.TM_CCOEFF_NORMED)
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+    # get the images
+    img1 = cv2.imread(img1_path, cv2.IMREAD_GRAYSCALE)
+    img2 = cv2.imread(img2_path, cv2.IMREAD_GRAYSCALE)
+    if img1 is None or img2 is None:
+        return 0  # if the image is not found, return 0
 
-    return max_val
+    # arrange the images shape
+    if img1.shape != img2.shape:
+        img2 = cv2.resize(img2, (img1.shape[1], img1.shape[0]))
 
-def find_top_similar_images(folder_path, top_n=50):
-    """
-    找出每张图片与其他图片最相似的前 top_n 张图片。
-    """
-    # 获取文件夹中所有图片路径
+    # calculate the similarity ssim
+    score, _ = compare_ssim(img1, img2, full=True)
+    return score
+
+def find_least_similar_images(folder_path, last_n=50, protected_files=None):
+    # get all the images in the folder
     image_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.lower().endswith(('png', 'jpg', 'jpeg', 'bmp'))]
     
     if len(image_files) < 2:
-        raise ValueError("文件夹中图片数量不足以计算相似度。")
+        raise ValueError("Not enough images to compare.")
 
     results = {}
 
     for target_image_path in tqdm(image_files, desc="Processing images"):
-
-        # 保存相似度结果
         similarity_scores = []
 
         for compare_image_path in image_files:
             if target_image_path == compare_image_path:
                 continue
-
             score = calculate_similarity(target_image_path, compare_image_path)
+            print(f"score: {score}")
             similarity_scores.append(score)
 
-        if len(similarity_scores) > 0:
+        # calculate the average similarity score
+        if similarity_scores:
             average_score = sum(similarity_scores) / len(similarity_scores)
         else:
             average_score = 0
+
         results[target_image_path] = average_score
 
-    return results
+    # exclude protected files
+    if protected_files:
+        results = {path: score for path, score in results.items() if os.path.basename(path) not in protected_files}
+
+    # get the least similar images
+    least_similar_images = sorted(results.items(), key=lambda x: x[1])[:last_n]
+    return [item[0] for item in least_similar_images]
 
 def main():
-    folder_path = "item_template/0"   # 替换为图片文件夹路径
-    top_n = 50  # 需要保留的最相似图片数量
+    protected_files = [f"{i}.png" for i in range(protected_number)]  # get the protected files
 
     try:
-        results = find_top_similar_images(folder_path, top_n)
-        sorted_results = sorted(results.items(), key=lambda x: x[1], reverse=True)
-        top_50_results = sorted_results[:50]
-        top_50_paths = {item[0] for item in top_50_results}  # 使用集合方便比对
-        final_50_results = sorted_results[-50:]
-        final_50_paths = {item[0] for item in final_50_results}  # 使用集合方便比对
+        least_similar_images = find_least_similar_images(folder_path, last_n, protected_files)
 
-        protected_files = [f"{i}.png" for i in range(40)]  # 生成保护文件列表
-        for image_path in results.keys():
-            # 检查文件是否在保护文件列表中
-            if os.path.basename(image_path) in protected_files:
-                print(f"跳过保护文件: {image_path}")
+        for image_path in os.listdir(folder_path):
+            full_path = os.path.join(folder_path, image_path)
+
+            if image_path in protected_files:
+                print(f"skip protected_files: {image_path}")
                 continue
 
-            if image_path not in top_50_paths and image_path not in final_50_paths:
+            if full_path not in least_similar_images:
                 try:
-                    os.remove(image_path)
-                    print(f"已删除: {image_path}")
+                    # os.remove(full_path)
+                    print(f"remove: {full_path}")
                 except Exception as e:
-                    print(f"无法删除 {image_path}: {e}")
-    
+                    print(f"can't remove {full_path}: {e}")
+
     except Exception as e:
-        print(f"发生错误: {e}")
+        print(f"error: {e}")
 
 if __name__ == "__main__":
     main()
