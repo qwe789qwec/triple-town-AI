@@ -16,7 +16,7 @@ current_state = None
 game = playgame()
 
 for image_file in image_files:
-    if image_file.startswith("game_"):
+    if image_file.startswith("game_67"):
         print(image_file)
     else:
         continue
@@ -25,7 +25,8 @@ for image_file in image_files:
     game_info = game_info.split("_")
     num, step, action = map(int, game_info)
     action_str = str(action) + ".png"
-    num = num + 34
+    num = num - 2
+    step = step + 41
     new_name = "_".join(["game", str(num), str(step), action_str])
 
     print(new_name)

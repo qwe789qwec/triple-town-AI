@@ -1,9 +1,11 @@
 /gameplay
 /item_template
 /arrange
+/memory
 /optimizer_parameters.pth
 /policy_net_parameters.pth
 /target_net_parameters.pth
 /__pycache__
 /triple_town
 /replay_memory.pkl
+/window_template.png

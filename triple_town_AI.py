@@ -134,7 +134,7 @@ class TripleTownAI:
         part_before_game = file_name.split("_info_")[0]
         part_after_game = file_name.split("_info_")[1]
 
-        game_info = part_before_game.split("_")
+        game_info = part_before_game.replace("game_", "").split("_")
         num, step, action = map(int, game_info)
 
         split_str = part_after_game.replace(".png", "").split('_')
@@ -158,41 +158,38 @@ class TripleTownAI:
             current = image_files[i]
             next = image_files[j]
 
-            if current.startswith("game_"):
-                continue
-            if next.startswith("game_"):
-                continue
-            # print(current)
-            current_num, current_step, current_action, current_next_item, current_score, current_state = self.get_file_info(current)
-            next_num, next_step, next_action, next_item, next_score, next_state = self.get_file_info(next)
+            if "_info_" in current and "_info_" in next:
+                print(current)
+                current_num, current_step, current_action, current_next_item, current_score, current_state = self.get_file_info(current)
+                next_num, next_step, next_action, next_item, next_score, next_state = self.get_file_info(next)
 
-            if current_num < skip:
-                continue
-            if current_num == next_num and next_step - current_step == 1:
-                all_state = self.game.slot_with_item(current_state, current_next_item)
-                current_state_tensor = torch.tensor(all_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
-
-                all_next_state = self.game.slot_with_item(next_state, next_item)
-                next_state_tensor = torch.tensor(all_next_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
-
-                if current_score == None:
-                    current_score = 0
-                elif next_score == None:
-                    next_score = 0
-                elif np.any(current_state >= 21):
-                    print(current, "got 21")
-                    current_state = None
+                if current_num < skip:
                     continue
-                elif np.any(next_state >= 21):
-                    print(next, "got 21")
-                    current_state = None
-                    continue
+                if current_num == next_num and next_step - current_step == 1:
+                    all_state = self.game.slot_with_item(current_state, current_next_item)
+                    current_state_tensor = torch.tensor(all_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
 
-                reward = next_score
-                reward_tensor = torch.tensor([reward], device=self.device)
+                    all_next_state = self.game.slot_with_item(next_state, next_item)
+                    next_state_tensor = torch.tensor(all_next_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
 
-                current_action_tensor = torch.tensor([current_action], device=self.device)
-                self.memory.push(current_state_tensor, current_action_tensor.unsqueeze(0), next_state_tensor, reward_tensor)
+                    if current_score == None:
+                        current_score = 0
+                    elif next_score == None:
+                        next_score = 0
+                    elif np.any(current_state >= 21):
+                        print(current, "got 21")
+                        current_state = None
+                        continue
+                    elif np.any(next_state >= 21):
+                        print(next, "got 21")
+                        current_state = None
+                        continue
+
+                    reward = next_score
+                    reward_tensor = torch.tensor([reward], device=self.device)
+
+                    current_action_tensor = torch.tensor([current_action], device=self.device)
+                    self.memory.push(current_state_tensor, current_action_tensor.unsqueeze(0), next_state_tensor, reward_tensor)
 
             if len(self.memory) >= load_size:
                 break

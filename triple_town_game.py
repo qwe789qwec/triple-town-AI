@@ -145,16 +145,19 @@ class playgame:
                 slot_x, slot_y = self.slot_region(row, col)
                 slot_img = self.latest_image[slot_y:slot_y + self.slot_size, slot_x:slot_x + self.slot_size]
                 index = self.find_matching_item(slot_img)
-                if index >= 21:
-                    index = 21
-                slot_matrix[col, row] = index
-                if index == 21 and check_time < 2:
+                if index >= 21 and check_time < 2:
                     print(f"get item {index} the {check_time} time to check")
                     time.sleep(1.5)
                     self.take_screenshot()
-                    check_time += 1
                     break
-            if index >= 21:
+                if index >= 21:
+                    slot_matrix[col, row] = 22
+                else:
+                    slot_matrix[col, row] = index
+            if check_time == 3:
+                break
+            elif index >= 21:
+                check_time += 1
                 continue
             else:
                 break

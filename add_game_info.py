@@ -6,7 +6,7 @@ import cv2
 import os
 from triple_town_game import playgame
 
-game_folder = 'gameplay'
+game_folder = 'arrange'
 image_files = sorted(
     [f for f in os.listdir(game_folder) if f.endswith(('.png', '.jpg', '.jpeg'))],
     key=lambda f: os.path.getmtime(os.path.join(game_folder, f))
@@ -19,24 +19,22 @@ for image_file in image_files:
     if "_info_" in image_file:
         print(image_file)
     else:
-        continue
+        image_path = os.path.join(game_folder, image_file)
+        game.latest_image = cv2.imread(image_path)
+        state, next_item = game.get_game_area()
+        score = game.get_score()
+        if score == None:
+            score = 0
 
-    # image_path = os.path.join(game_folder, image_file)
-    # game.latest_image = cv2.imread(image_path)
-    # state, next_item = game.get_game_area()
-    # score = game.get_score()
-    # if score == None:
-    #     score = 0
+        arr_str = "_".join(map(str, state.flatten()))
+        arr_str = arr_str + ".png"
+        game_info = image_file.replace(".png", "")
+        new_name = "_".join([game_info, "info", str(next_item), str(score), arr_str])
 
-    # arr_str = "_".join(map(str, state.flatten()))
-    # arr_str = arr_str + ".png"
-    # game_info = image_file.replace("game_", "").replace(".png", "")
-    # new_name = "_".join([game_info, "info", str(next_item), str(score), arr_str])
-
-    # print(new_name)
-    # new_path = os.path.join(game_folder, new_name)
-    # os.rename(image_path, new_path)
-#     break
+        print(new_name)
+        new_path = os.path.join(game_folder, new_name)
+        os.rename(image_path, new_path)
+    # break
 
 # part_before_game = new_name.split("_info_")[0]
 # part_after_game = new_name.split("_info_")[1]
