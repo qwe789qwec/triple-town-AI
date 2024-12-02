@@ -21,7 +21,7 @@ for image_file in image_files:
     else:
         image_path = os.path.join(game_folder, image_file)
         game.latest_image = cv2.imread(image_path)
-        state, next_item = game.get_game_area()
+        state, next_item = game.get_game_area(take_screenshot=False)
         score = game.get_score()
         if score == None:
             score = 0

@@ -16,7 +16,7 @@ class playgame:
         self.save_dir = save_dir
         self.game_number = self.get_next_game_number()
         # get window position
-        self.screen_x, self.screen_y = self.get_window_info()
+        self.screen_x, self.screen_y = self.get_game_position()
         print(self.screen_x, self.screen_y)
         self.screen_w, self.screen_h = 802, 639
 
@@ -44,10 +44,10 @@ class playgame:
 
         self.last_number = 0
 
-    def get_window_info(self):
+    def get_game_position(self):
         screenshot = pyautogui.screenshot()
         screenshot = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-        template = cv2.imread('window_template.png', cv2.IMREAD_COLOR)
+        template = cv2.imread('window_template_2.png', cv2.IMREAD_COLOR)
         result = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
 
@@ -91,16 +91,6 @@ class playgame:
         self.step = self.step + 1
         filename = f"game_{self.game_number}_{self.step}_{action}.png"
         pil_image.save(os.path.join(self.save_dir, filename))
-
-    def load_image(self, filename):
-        self.latest_image = cv2.imread(filename)
-
-    def show_image(self, image):
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        cv2.imshow('game', image_rgb)
-        cv2.waitKey(0)
-        time.sleep(1)
-        cv2.destroyAllWindows()
 
     def get_score(self):
         score = None
@@ -164,7 +154,7 @@ class playgame:
         return slot_matrix, next_item_id
 
     def slot_with_item(self, slot, item):
-
+        # create a 7x7 matrix with the item in the center
         result = np.full((7, 7), 0)
         result[:3, :3] = slot[:3, :3]   # top_left
         result[:3, 4:] = slot[:3, 3:]   # top_right
@@ -175,7 +165,7 @@ class playgame:
         return result
     
     def split_result(self, result):
-
+        # split the 7x7 matrix into a 6x6 slot matrix and the item
         slot_matrix = np.full((6, 6), 0)
         slot_matrix[:3, :3] = result[:3, :3]
         slot_matrix[:3, 3:] = result[:3, 4:]
@@ -190,6 +180,7 @@ class playgame:
         matching_item_id = None
         item_image_gray = cv2.cvtColor(item_image, cv2.COLOR_BGR2GRAY)
 
+        # compare the item image with the template images
         for item_folder in os.listdir("item_template"):
             item_folder_path = os.path.join("item_template", item_folder)
             
@@ -212,6 +203,8 @@ class playgame:
                             print(f"Renamed: {template_image_path} -> {new_path}")
                         break
 
+        # if no matching item found, create a new folder
+        # else, save the new item image
         if matching_item_id is None:
             print("No match found, creating a new folder for this item.")
             new_item_id = str(self.get_next_path_id("item_template"))
@@ -246,7 +239,7 @@ class playgame:
         result = cv2.matchTemplate(self.latest_image, template, cv2.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
 
-        # get window position
+        # get continue position
         if max_val > 0.8:  # matching threshold
             print(f"game end")
             return True
@@ -254,13 +247,8 @@ class playgame:
             # print("no matching window found!")
             return False
         
-    def mouse_click(self, pos_number):
-        # pos = pos + 1
-        # x = pos % 6
-        # y = pos // 6
-
-        # pos = pos_onehot.max(0).indices
-        # pos_number = pos.item()
+    def click_slot(self, pos_number):
+        # play game
         self.save_image(self.latest_image, pos_number)
 
         row, col = divmod(pos_number, 6)
@@ -277,11 +265,14 @@ class playgame:
         pyautogui.click(self.start_x, self.start_y)
         time.sleep(5)
 
-# gamesc = playgame()
-# gamesc.take_screenshot()
-# gamesc.latest_image = cv2.imread('gameplay/game_2_1_18.png')
-# gamesc.save_image(gamesc.latest_image, 12)
-# state , next_item = gamesc.get_game_area()
-# print("state:\n", state)
-# print("next_item:", next_item)
-# print(gamesc.get_score())
+# for testing
+gamesc = playgame()
+gamesc.take_screenshot()
+gamesc.latest_image = cv2.imread('save/game_1_0.png')
+gamesc.click_slot(0)
+gamesc.take_screenshot()
+gamesc.save_image(gamesc.latest_image, 12)
+state , next_item = gamesc.get_game_area()
+print("state:\n", state)
+print("next_item:", next_item)
+print(gamesc.get_score())
