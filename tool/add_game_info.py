@@ -4,6 +4,8 @@ import random
 import time
 import cv2
 import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from triple_town_game import playgame
 
 game_folder = 'gameplay'
@@ -17,7 +19,9 @@ game = playgame()
 
 for image_file in image_files:
     if "_info_" in image_file:
-        print(image_file)
+        # print(image_file)
+        continue
+    # elif image_file.startswith("game_9"):
     else:
         image_path = os.path.join(game_folder, image_file)
         game.latest_image = cv2.imread(image_path)

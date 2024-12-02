@@ -56,144 +56,6 @@ class TripleTownAI:
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=learning_rate, amsgrad=True)
 
-    def load_memory_process(self, load_size=150, skip=0):
-        game_folder = 'gameplay'
-        print("start load memory")
-        image_files = sorted(
-            [f for f in os.listdir(game_folder) if f.endswith(('.png', '.jpg', '.jpeg'))],
-            key=lambda f: os.path.getmtime(os.path.join(game_folder, f))
-        )
-        current_state = None
-        for i in range(len(image_files)-1):
-            j = i + 1
-            current = image_files[i]
-            next = image_files[j]
-
-            if current.startswith("game_"):
-                print(current)
-            else:
-                continue
-
-            numbers1 = current.replace("game_", "").replace(".png", "").split("_")
-            current_num1, current_step, current_action = map(int, numbers1)
-            numbers2 = next.replace("game_", "").replace(".png", "").split("_")
-            next_num2, next_step, next_action = map(int, numbers2)
-            print(current)
-
-            if current_num1 < skip:
-                continue
-            if current_num1 == next_num2 and next_step - current_step == 1:
-                if current_state is None:
-                    self.game.latest_image = cv2.imread(os.path.join(game_folder, current))
-                    current_state, next_item = self.game.get_game_area()
-                    all_state = self.game.slot_with_item(current_state, next_item)
-                    current_score = self.game.get_score()
-                    current_state_tensor = torch.tensor(all_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
-                    self.old_score = current_score
-
-                self.game.latest_image = cv2.imread(os.path.join(game_folder, next))
-                next_state, new_next_item = self.game.get_game_area()
-                all_next_state = self.game.slot_with_item(next_state, new_next_item)
-                next_score = self.game.get_score()
-                next_state_tensor = torch.tensor(all_next_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
-
-                if current_score == None:
-                    current_score = 0
-                elif next_score == None:
-                    next_score = 0
-                elif np.any(current_state >= 21):
-                    print(current, "got 21")
-                    current_state = None
-                    continue
-                elif np.any(next_state >= 21):
-                    print(next, "got 21")
-                    current_state = None
-                    continue
-
-                reward = next_score
-                reward_tensor = torch.tensor([reward], device=self.device)
-
-                current_action_tensor = torch.tensor([current_action], device=self.device)
-                # action = F.one_hot(current_action_tensor, num_classes=36).to(torch.int64)
-                # print(action.shape)
-                self.memory.push(current_state_tensor, current_action_tensor.unsqueeze(0), next_state_tensor, reward_tensor)
-
-                current_state_tensor = next_state_tensor
-                current_score = next_score
-            else:
-                current_state = None
-            if current_num1 != next_num2:
-                self.top_reward = 1
-            
-            print("length =",len(self.memory))
-            if len(self.memory) >= load_size:
-                break
-        # return self.memory
-
-    def get_file_info(self, file_name):
-        part_before_game = file_name.split("_info_")[0]
-        part_after_game = file_name.split("_info_")[1]
-
-        game_info = part_before_game.replace("game_", "").split("_")
-        num, step, action = map(int, game_info)
-
-        split_str = part_after_game.replace(".png", "").split('_')
-        next_item = int(split_str[0])
-        score = int(split_str[1])
-        matrix_elements = list(map(int, split_str[2:]))
-        state = np.array(matrix_elements).reshape(6, 6)
-
-        return num, step, action, next_item, score, state
-
-    def load_new_memory(self, load_size=150, skip=0):
-        game_folder = 'gameplay'
-        print("start load memory")
-        image_files = sorted(
-            [f for f in os.listdir(game_folder) if f.endswith(('.png', '.jpg', '.jpeg'))],
-            key=lambda f: os.path.getmtime(os.path.join(game_folder, f))
-        )
-        
-        for i in range(len(image_files)-1):
-            j = i + 1
-            current = image_files[i]
-            next = image_files[j]
-
-            if "_info_" in current and "_info_" in next:
-                print(current)
-                current_num, current_step, current_action, current_next_item, current_score, current_state = self.get_file_info(current)
-                next_num, next_step, next_action, next_item, next_score, next_state = self.get_file_info(next)
-
-                if current_num < skip:
-                    continue
-                if current_num == next_num and next_step - current_step == 1:
-                    all_state = self.game.slot_with_item(current_state, current_next_item)
-                    current_state_tensor = torch.tensor(all_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
-
-                    all_next_state = self.game.slot_with_item(next_state, next_item)
-                    next_state_tensor = torch.tensor(all_next_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
-
-                    if current_score == None:
-                        current_score = 0
-                    elif next_score == None:
-                        next_score = 0
-                    elif np.any(current_state >= 21):
-                        print(current, "got 21")
-                        current_state = None
-                        continue
-                    elif np.any(next_state >= 21):
-                        print(next, "got 21")
-                        current_state = None
-                        continue
-
-                    reward = next_score
-                    reward_tensor = torch.tensor([reward], device=self.device)
-
-                    current_action_tensor = torch.tensor([current_action], device=self.device)
-                    self.memory.push(current_state_tensor, current_action_tensor.unsqueeze(0), next_state_tensor, reward_tensor)
-
-            if len(self.memory) >= load_size:
-                break
-
     def select_action(self, all_state):
         sample = random.random()
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
@@ -295,6 +157,72 @@ class TripleTownAI:
         for key in policy_net_state_dict:
             target_net_state_dict[key] = policy_net_state_dict[key]*self.tau + target_net_state_dict[key]*(1-self.tau)
         self.target_net.load_state_dict(target_net_state_dict)
+
+    def get_file_info(self, file_name):
+        part_before_game = file_name.split("_info_")[0]
+        part_after_game = file_name.split("_info_")[1]
+
+        game_info = part_before_game.replace("game_", "").split("_")
+        num, step, action = map(int, game_info)
+
+        split_str = part_after_game.replace(".png", "").split('_')
+        next_item = int(split_str[0])
+        score = int(split_str[1])
+        matrix_elements = list(map(int, split_str[2:]))
+        state = np.array(matrix_elements).reshape(6, 6)
+
+        return num, step, action, next_item, score, state
+
+    def load_memory(self, load_size=150, skip=0):
+        game_folder = 'gameplay'
+        print("start load memory")
+        image_files = sorted(
+            [f for f in os.listdir(game_folder) if f.endswith(('.png', '.jpg', '.jpeg'))],
+            key=lambda f: os.path.getmtime(os.path.join(game_folder, f))
+        )
+        
+        for i in range(len(image_files)-1):
+            j = i + 1
+            current = image_files[i]
+            next = image_files[j]
+
+            if "_info_" in current and "_info_" in next:
+                print(current)
+                current_num, current_step, current_action, current_next_item, current_score, current_state = self.get_file_info(current)
+                next_num, next_step, next_action, next_item, next_score, next_state = self.get_file_info(next)
+
+                if current_num < skip:
+                    continue
+                if current_num == next_num and next_step - current_step == 1:
+                    all_state = self.game.slot_with_item(current_state, current_next_item)
+                    current_state_tensor = torch.tensor(all_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
+
+                    all_next_state = self.game.slot_with_item(next_state, next_item)
+                    next_state_tensor = torch.tensor(all_next_state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
+
+                    if current_score == None:
+                        current_score = 0
+                    elif next_score == None:
+                        next_score = 0
+                    if np.any(current_state >= 21):
+                        print(current, "got 21")
+                        current_state = None
+                        continue
+                    if np.any(next_state >= 21):
+                        print(next, "got 21")
+                        next_state = None
+                        continue
+
+                    reward = next_score
+                    reward_tensor = torch.tensor([reward], device=self.device)
+
+                    current_action_tensor = torch.tensor([current_action], device=self.device)
+                    self.memory.push(current_state_tensor, current_action_tensor.unsqueeze(0), next_state_tensor, reward_tensor)
+
+            if len(self.memory) >= load_size:
+                break
+        
+        print("memory length:", len(self.memory.sample()))
 
     def save_model(self):
         torch.save(self.target_net.state_dict(), "target_net_parameters.pth")
