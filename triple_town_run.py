@@ -43,17 +43,17 @@ tpai = TripleTownAI(
     memory_size=MEMORY_SIZE
 )
 
-# tpai.load_model()
+tpai.load_model()
 # tpai.memory.load_memory()
 # tpai.optimize_model()
 tpai.load_memory(LOAD_SIZE, SKIP_GAME)
 # tpai.memory.save_memory()
 
-if len(tpai.memory.sample()) > BATCH_SIZE:
-    for i in range(len(tpai.memory.sample())-BATCH_SIZE):
-        tpai.optimize_model()
-        tpai.update_model()
-print("finish optimize model and update model")
+# if len(tpai.memory.sample()) > BATCH_SIZE:
+#     for i in range(len(tpai.memory.sample())-BATCH_SIZE):
+#         tpai.optimize_model()
+#         tpai.update_model()
+# print("finish optimize model and update model")
 
 tpai.save_model()
 
@@ -84,7 +84,7 @@ for i_episode in range(num_episodes):
     for t in count():
 
         action = tpai.select_action(state_tensor)
-        game.mouse_click(action.item())
+        game.click_slot(action.item())
         game.take_screenshot()
         new_score = game.get_score()
         if new_score == None:
