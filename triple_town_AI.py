@@ -187,7 +187,7 @@ class TripleTownAI:
             next = image_files[j]
 
             if "_info_" in current and "_info_" in next:
-                print(current)
+                # print(current)
                 current_num, current_step, current_action, current_next_item, current_score, current_state = self.get_file_info(current)
                 next_num, next_step, next_action, next_item, next_score, next_state = self.get_file_info(next)
 

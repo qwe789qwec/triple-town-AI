@@ -4,9 +4,9 @@ import heapq
 from tqdm import tqdm
 from skimage.metrics import structural_similarity as compare_ssim
 
-folder_path = "item_template/0" # image folder path
-protected_number = 40 # protected file number
-last_n = 50 # last n images
+folder_path = "item_template/4" # image folder path
+protected_number = 20 # protected file number
+last_n = 120 # last n images
 
 def calculate_similarity(img1_path, img2_path):
     # get the images
@@ -39,7 +39,7 @@ def find_least_similar_images(folder_path, last_n=50, protected_files=None):
             if target_image_path == compare_image_path:
                 continue
             score = calculate_similarity(target_image_path, compare_image_path)
-            print(f"score: {score}")
+            # print(f"score: {score}")
             similarity_scores.append(score)
 
         # calculate the average similarity score
@@ -73,7 +73,7 @@ def main():
 
             if full_path not in least_similar_images:
                 try:
-                    # os.remove(full_path)
+                    os.remove(full_path)
                     print(f"remove: {full_path}")
                 except Exception as e:
                     print(f"can't remove {full_path}: {e}")
