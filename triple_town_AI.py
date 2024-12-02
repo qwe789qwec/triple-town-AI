@@ -159,13 +159,13 @@ class TripleTownAI:
         self.target_net.load_state_dict(target_net_state_dict)
 
     def get_file_info(self, file_name):
-        part_before_game = file_name.split("_info_")[0]
-        part_after_game = file_name.split("_info_")[1]
+        part_before_info = file_name.split("_info_")[0]
+        part_after_info = file_name.split("_info_")[1]
 
-        game_info = part_before_game.replace("game_", "").split("_")
+        game_info = part_before_info.replace("game_", "").split("_")
         num, step, action = map(int, game_info)
 
-        split_str = part_after_game.replace(".png", "").split('_')
+        split_str = part_after_info.replace(".png", "").split('_')
         next_item = int(split_str[0])
         score = int(split_str[1])
         matrix_elements = list(map(int, split_str[2:]))
