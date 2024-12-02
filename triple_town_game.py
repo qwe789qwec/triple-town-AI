@@ -47,7 +47,7 @@ class playgame:
     def get_game_position(self):
         screenshot = pyautogui.screenshot()
         screenshot = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-        template = cv2.imread('window_template_2.png', cv2.IMREAD_COLOR)
+        template = cv2.imread('window_template.png', cv2.IMREAD_COLOR)
         result = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
 
