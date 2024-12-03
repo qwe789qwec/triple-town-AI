@@ -69,7 +69,6 @@ class TripleTownAI:
                 state_one_hot = F.one_hot(state_long, num_classes=ITEM_TYPE)
                 state_one_hot = state_one_hot.permute(2, 0, 1)
                 policy_output = self.policy_net(state_one_hot.unsqueeze(0).float())
-                print(policy_output.shape)
                 probabilities = F.softmax(policy_output.flatten(1), dim=1).view_as(policy_output)
 
         else:
@@ -212,12 +211,16 @@ class TripleTownAI:
                         print(next, "got 21")
                         next_state = None
                         continue
-
-                    reward = next_score
-                    reward_tensor = torch.tensor([reward], device=self.device)
+                    
+                    current_score = torch.tensor([current_score], device=self.device)
+                    next_score = torch.tensor([next_score], device=self.device)
 
                     current_action_tensor = torch.tensor([current_action], device=self.device)
-                    self.memory.push(current_state_tensor, current_action_tensor.unsqueeze(0), next_state_tensor, reward_tensor)
+                    self.memory.push(current_state_tensor, 
+                                     current_action_tensor.unsqueeze(0),
+                                     current_score,
+                                     next_state_tensor, 
+                                     next_score)
 
             if len(self.memory) >= load_size:
                 break

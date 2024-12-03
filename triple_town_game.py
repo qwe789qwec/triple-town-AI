@@ -138,13 +138,13 @@ class playgame:
             while retry_count < max_retries:
                 slot_img = self.latest_image[slot_y:slot_y + self.slot_size, slot_x:slot_x + self.slot_size]
                 index = self.find_matching_item(slot_img)
-                if index >= 21:
+                if index >= 21 and retry_count < max_retries - 1:
                     retry_count += 1
-                    if retry_count >= max_retries:
-                        slot_matrix[col, row] = 21
-                        if take_screenshot:
-                            time.sleep(1)
-                            self.take_screenshot()
+                    slot_matrix[col, row] = 21
+                    if take_screenshot:
+                        print(f"Failed to recognize slot {slot}, taking screenshot.")
+                        time.sleep(1.5)
+                        self.take_screenshot()
                 else:
                     slot_matrix[col, row] = index
                     break

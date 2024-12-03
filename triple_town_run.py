@@ -43,17 +43,17 @@ tpai = TripleTownAI(
     memory_size=MEMORY_SIZE
 )
 
-tpai.load_model()
+# tpai.load_model()
 # tpai.memory.load_memory()
 # tpai.optimize_model()
 tpai.load_memory(LOAD_SIZE, SKIP_GAME)
-# tpai.memory.save_memory()
+tpai.memory.save_memory()
 
-# if len(tpai.memory.sample()) > BATCH_SIZE:
-#     for i in range(len(tpai.memory.sample())-BATCH_SIZE):
-#         tpai.optimize_model()
-#         tpai.update_model()
-# print("finish optimize model and update model")
+if len(tpai.memory.sample()) > BATCH_SIZE:
+    for i in range(len(tpai.memory.sample())-BATCH_SIZE):
+        tpai.optimize_model()
+        tpai.update_model()
+print("finish optimize model and update model")
 
 tpai.save_model()
 
@@ -79,49 +79,56 @@ for i_episode in range(num_episodes):
         score = game.get_score()
         if score == None:
             score = 0
-    old_pos_number = 0
+    print("state:\n", state)
+    print("score:", score)
+    print("=========================================================")
 
     for t in count():
 
         action = tpai.select_action(state_tensor)
         game.click_slot(action.item())
-        game.take_screenshot()
-        new_score = game.get_score()
-        if new_score == None:
-            time.sleep(1)
-            game.take_screenshot()
-            new_score = game.get_score()
-            if new_score == None:
-                new_score = 0
-        reward = new_score
 
         print("action:", action.item())
         print("next_item:", next_item)
-        print("score:", new_score)
+        print("score:", score)
         print("game_step:", t)
 
         if(game.is_game_end()):
-            next_state_tensor = None
+            new_state_tensor = None
+            new_score = None
+            game.take_screenshot()
+            game.save_image(game.latest_image)
             game.game_number = game.get_next_game_number()
             game.step = 0
             game.restart_game()
         else:
-            observation, new_next_item = game.get_game_area()
-            all_observation = game.slot_with_item(observation, new_next_item)
-            next_state_tensor = torch.tensor(all_observation, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
-            
-        old_pos_number = action.item()
-        reward = new_score
-        reward_tensor = torch.tensor([reward], device=device)
+            game.take_screenshot()
+            new_score = game.get_score()
+            if new_score == None:
+                time.sleep(1)
+                game.take_screenshot()
+                new_score = game.get_score()
+                if new_score == None:
+                    new_score = 0
+            new_state, new_next_item = game.get_game_area()
+            all_new_state = game.slot_with_item(new_state, new_next_item)
+            new_state_tensor = torch.tensor(all_new_state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
+            score_tensor = torch.tensor([score], device=device)
+            new_score_tensor = torch.tensor([new_score], device=device)
 
-        tpai.memory.push(state_tensor, action.unsqueeze(0).unsqueeze(0), next_state_tensor, reward_tensor)
+        tpai.memory.push(state_tensor, 
+                         action.unsqueeze(0).unsqueeze(0), 
+                         score_tensor, 
+                         new_state_tensor, 
+                         new_score_tensor)
 
-        state = observation
+        state = new_state
         next_item = new_next_item
-        state_tensor = next_state_tensor
+        state_tensor = new_state_tensor
+        score_tensor = new_score_tensor
         print("state:\n", state)
-        print("reward:", reward_tensor.item())
-        print("=========================================================")
+        print("score:", new_score)
+        print("=============================================================")
 
         # Perform one step of the optimization (on the policy network)
         tpai.optimize_model()
@@ -130,7 +137,7 @@ for i_episode in range(num_episodes):
         # θ′ ← τ θ + (1 −τ )θ′
         tpai.update_model()
 
-        if next_state_tensor is None:
+        if new_state_tensor is None:
             break
     tpai.save_model()
     # tpai.memory.save_memory()
