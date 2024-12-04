@@ -4,6 +4,7 @@ from collections import namedtuple, deque
 import pickle
 import random
 import torch
+from triple_town_game import playgame
 
 Transition = namedtuple('Transition', ('state', 'action', 'score', 'next_state', 'next_score'))
 
@@ -21,46 +22,67 @@ BROAD_SIZE = 6
 class ReplayMemory:
     def __init__(self, capacity):
         self.memory = deque(maxlen=capacity)
+        self.game = playgame()
         self.Transition = Transition
         self.EnhancedTransition = EnhancedTransition
+
+    def get_reward(self, statein):
+        state_np = statein.squeeze().cpu().numpy()
+        state, next_item = self.game.split_result(state_np)
+        mask = torch.flatten(torch.tensor(state)).to(device)
+        reward = 0
+        for i in range(36):
+            if mask[i] == 0:
+                reward += 1
+        return reward
     
     def push(self, *args):
         transtion = Transition(*args)
-        step_reward = transtion.next_score - transtion.score
 
         # if step_reward > 150:
-        #     # train_reward = 0.3
-        if step_reward > 600:
-            train_reward = 0.5
-        elif step_reward > 1000:
-            train_reward = 0.7
-        elif step_reward > 3000:
-            train_reward = 0.9
-        elif step_reward > 7500:
-            train_reward = 1
-        else:
-            train_reward = 0
+        #     train_reward = 0.3
+        # if step_reward > 450:
+        #     train_reward = 0.5
+        # elif step_reward > 1000:
+        #     train_reward = 0.7
+        # elif step_reward > 3000:
+        #     train_reward = 0.9
+        # elif step_reward > 7500:
+        #     train_reward = 1
+        # else:
+        #     train_reward = 0
+        if transtion.state is not None and transtion.next_state is not None:
+            step_reward = transtion.next_score - transtion.score
+            state = transtion.state.squeeze()
+            state_long = state.long()
+            state_one_hot = F.one_hot(state_long, num_classes=ITEM_TYPE)
+            state_one_hot = state_one_hot.permute(2, 0, 1)
 
-        state = transtion.state.squeeze()
-        state_long = state.long()
-        state_one_hot = F.one_hot(state_long, num_classes=ITEM_TYPE)
-        state_one_hot = state_one_hot.permute(2, 0, 1)
+            next_state = transtion.next_state.squeeze()
+            next_state_long = next_state.long()
+            next_state_one_hot = F.one_hot(next_state_long, num_classes=ITEM_TYPE)
+            next_state_one_hot = next_state_one_hot.permute(2, 0, 1)
 
-        next_state = transtion.next_state.squeeze()
-        next_state_long = next_state.long()
-        next_state_one_hot = F.one_hot(next_state_long, num_classes=ITEM_TYPE)
-        next_state_one_hot = next_state_one_hot.permute(2, 0, 1)
+            now_reward = self.get_reward(transtion.state)
+            next_reward = self.get_reward(transtion.next_state)
+            if (next_reward - now_reward) < -1:
+                train_reward = 1
+            elif (next_reward - now_reward) == 0:
+                train_reward = -1
+            else:
+                train_reward = 0
 
-        if torch.equal(transtion.state, transtion.next_state):
-            train_reward = -1
-        train_reward_tensor = torch.tensor([train_reward], device=device)
-        enhancedTransition = EnhancedTransition(state_one_hot.unsqueeze(0).float(),
-                                                transtion.action,
-                                                transtion.score,
-                                                next_state_one_hot.unsqueeze(0).float(),
-                                                transtion.next_score,
-                                                train_reward_tensor)
-        self.memory.append(enhancedTransition)
+            # if transtion.state is not None and transtion.next_state is not None:
+            #     if torch.equal(transtion.state, transtion.next_state):
+            #         train_reward = -1
+            train_reward_tensor = torch.tensor([train_reward], device=device)
+            enhancedTransition = EnhancedTransition(state_one_hot.unsqueeze(0).float(),
+                                                    transtion.action,
+                                                    transtion.score,
+                                                    next_state_one_hot.unsqueeze(0).float(),
+                                                    transtion.next_score,
+                                                    train_reward_tensor)
+            self.memory.append(enhancedTransition)
     
     def random_sample(self, batch_size):
         # batch = self.enhanced_sample()
@@ -68,52 +90,6 @@ class ReplayMemory:
     
     def sample(self):
         return self.memory
-    
-    # def enhanced_sample(self):
-    #     batch = list(self.memory)
-    #     enhanced_batch = []
-
-    #     for i in range(len(batch)-1):            
-    #         if batch[i].next_state is None:
-    #             continue
-    #         step_reward = batch[i].reward - batch[i+1].reward
-
-    #         if step_reward > 150:
-    #             train_reward = 0.3
-    #         elif step_reward > 600:
-    #             train_reward = 0.5
-    #         elif step_reward > 1000:
-    #             train_reward = 0.7
-    #         elif step_reward > 3000:
-    #             train_reward = 0.9
-    #         elif step_reward > 7500:
-    #             train_reward = 1
-    #         else:
-    #             train_reward = 0
-            
-    #         if torch.equal(batch[i].state, batch[i-1].state):
-    #             train_reward = -1
-    #         if batch[i].action.item() == 0 and torch.equal(batch[i].action, batch[i-1].action):
-    #             train_reward = -1
-            
-    #         state = batch[i].state.squeeze()
-    #         state_long = state.long()
-    #         state_one_hot = F.one_hot(state_long, num_classes=ITEM_TYPE)
-    #         state_one_hot = state_one_hot.permute(2, 0, 1)
-
-    #         next_state = batch[i].next_state.squeeze()
-    #         next_state_long = next_state.long()
-    #         next_state_one_hot = F.one_hot(next_state_long, num_classes=ITEM_TYPE)
-    #         next_state_one_hot = next_state_one_hot.permute(2, 0, 1)
-
-    #         train_reward_tensor = torch.tensor([train_reward], device=device)
-    #         enhanced_transition = EnhancedTransition(state_one_hot.unsqueeze(0).float(),
-    #                                                  batch[i].action,
-    #                                                  next_state_one_hot.unsqueeze(0).float(),
-    #                                                  batch[i].reward,
-    #                                                  train_reward_tensor)
-    #         enhanced_batch.append(enhanced_transition)
-    #     return enhanced_batch
     
     def save_memory(self):
         with open("replay_memory.pkl", 'wb') as f:

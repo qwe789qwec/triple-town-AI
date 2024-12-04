@@ -18,22 +18,22 @@ current_state = None
 game = playgame()
 
 for image_file in image_files:
-    if image_file.startswith("game_9_"):
+    if image_file.startswith("game_1_"):
         print(image_file)
     else:
         continue
     
-    part_before_info = image_file.split("_info_")[0]
-    part_before_info = part_before_info.replace("game_", "")
+    # part_before_info = image_file.split("_info_")[0]
+    part_before_info = image_file.replace("game_", "").replace(".png", "")
     game_info = part_before_info.split("_")
     num, step, action = map(int, game_info)
     action_str = str(action) + ".png"
-    num = num
+    num = num + 56
     step = step
     new_name = "_".join(["game", str(num), str(step), action_str])
 
-    part_after_info = image_file.split("_info_")[1]
-    part_after_info = part_after_info.replace(".png", "")
+    # part_after_info = image_file.split("_info_")[1]
+    # part_after_info = part_after_info.replace(".png", "")
 
     # new_name = "game_" + part_before_info + ".png"
     print(new_name)

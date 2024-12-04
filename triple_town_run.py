@@ -17,7 +17,7 @@ device = torch.device(
 BROAD_SIZE = 6
 ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
 ITEM_TYPE = 22
-BATCH_SIZE = 150
+BATCH_SIZE = 300
 GAMMA = 0.99
 EPS_START = 0.9
 EPS_END = 0.05
@@ -25,7 +25,7 @@ EPS_DECAY = 10
 TAU = 0.005
 LR = 1e-4
 MEMORY_SIZE = 10000
-LOAD_SIZE = 10000
+LOAD_SIZE = 500
 SKIP_GAME = 0
 
 game = playgame()
@@ -43,22 +43,23 @@ tpai = TripleTownAI(
     memory_size=MEMORY_SIZE
 )
 
-# tpai.load_model()
+tpai.load_model()
 # tpai.memory.load_memory()
 # tpai.optimize_model()
-tpai.load_memory(LOAD_SIZE, SKIP_GAME)
-tpai.memory.save_memory()
+# tpai.load_memory(LOAD_SIZE, SKIP_GAME)
+# tpai.memory.save_memory()
 
-if len(tpai.memory.sample()) > BATCH_SIZE:
-    for i in range(len(tpai.memory.sample())-BATCH_SIZE):
-        tpai.optimize_model()
-        tpai.update_model()
-print("finish optimize model and update model")
+# if len(tpai.memory.sample()) > BATCH_SIZE:
+#     for i in range(len(tpai.memory.sample())-BATCH_SIZE):
+#         tpai.optimize_model()
+#         tpai.update_model()
+#         print("optimize model and update model:", i)
+# print("finish optimize model and update model")
 
-tpai.save_model()
+# tpai.save_model()
 
 if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 2
+    num_episodes = 20
     torch.cuda.empty_cache()
 else:
     num_episodes = 3
@@ -79,30 +80,27 @@ for i_episode in range(num_episodes):
         score = game.get_score()
         if score == None:
             score = 0
-    print("state:\n", state)
-    print("score:", score)
-    print("=========================================================")
 
     for t in count():
 
+        print("state:\n", state)
+        print("next_item:", next_item)
         action = tpai.select_action(state_tensor)
         game.click_slot(action.item())
 
         print("action:", action.item())
-        print("next_item:", next_item)
-        print("score:", score)
         print("game_step:", t)
+        print("=============================================================")
 
+        game.take_screenshot()
         if(game.is_game_end()):
             new_state_tensor = None
             new_score = None
-            game.take_screenshot()
             game.save_image(game.latest_image)
             game.game_number = game.get_next_game_number()
             game.step = 0
             game.restart_game()
         else:
-            game.take_screenshot()
             new_score = game.get_score()
             if new_score == None:
                 time.sleep(1)
@@ -126,10 +124,7 @@ for i_episode in range(num_episodes):
         next_item = new_next_item
         state_tensor = new_state_tensor
         score_tensor = new_score_tensor
-        print("state:\n", state)
-        print("score:", new_score)
-        print("=============================================================")
-
+        
         # Perform one step of the optimization (on the policy network)
         tpai.optimize_model()
 
@@ -140,6 +135,6 @@ for i_episode in range(num_episodes):
         if new_state_tensor is None:
             break
     tpai.save_model()
-    # tpai.memory.save_memory()
+    tpai.memory.save_memory()
 
 print('Complete')
