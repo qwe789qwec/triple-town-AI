@@ -39,20 +39,21 @@ class ReplayMemory:
     def push(self, *args):
         transtion = Transition(*args)
 
-        # if step_reward > 150:
-        #     train_reward = 0.3
-        # if step_reward > 450:
-        #     train_reward = 0.5
-        # elif step_reward > 1000:
-        #     train_reward = 0.7
-        # elif step_reward > 3000:
-        #     train_reward = 0.9
-        # elif step_reward > 7500:
-        #     train_reward = 1
-        # else:
-        #     train_reward = 0
         if transtion.state is not None and transtion.next_state is not None:
             step_reward = transtion.next_score - transtion.score
+
+            # if step_reward > 150:
+            #     train_reward = 0.3
+            # if step_reward > 450:
+            #     train_reward = 0.5
+            # elif step_reward > 1000:
+            #     train_reward = 0.7
+            # elif step_reward > 3000:
+            #     train_reward = 0.9
+            # elif step_reward > 7500:
+            #     train_reward = 1
+            # else:
+            #     train_reward = 0
             state = transtion.state.squeeze()
             state_long = state.long()
             state_one_hot = F.one_hot(state_long, num_classes=ITEM_TYPE)
