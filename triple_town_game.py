@@ -10,14 +10,22 @@ from pathlib import Path
 
 reader = easyocr.Reader(['en'], gpu = True)
 
-class playgame:
+class triple_town_handler:
     def __init__(self, save_dir='gameplay'):
         self.step = 0
         self.save_dir = save_dir
         self.game_number = self.get_next_game_number()
+        self.init_mouse_position()
+        # slot for game and recognize
+        self.slot_gap = 80
+        self.slot_size = 60
+
+        self.score = 0
+        self.last_score = 0
+
+    def init_mouse_position(self):
         # get window position
         self.screen_x, self.screen_y = self.get_game_position()
-        print(self.screen_x, self.screen_y)
         self.screen_w, self.screen_h = 802, 639
 
         # mouse standby and play game init
@@ -37,12 +45,6 @@ class playgame:
         self.end_y = self.screen_y + 247
         self.start_x = self.screen_x + 97
         self.start_y = self.screen_y + 198
-
-        # slot for game and recognize
-        self.slot_gap = 80
-        self.slot_size = 60
-
-        self.last_number = 0
 
     def get_game_position(self):
         screenshot = pyautogui.screenshot()
@@ -87,40 +89,41 @@ class playgame:
         if image is None:
             print("No image to save.")
             return
+        gameinfo = "_".join(map(str, self.state.flatten()))
         pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         self.step = self.step + 1
-        filename = f"game_{self.game_number}_{self.step}_{action}.png"
+        filename = f"game_{self.game_number}_{self.step}_{action}_info_{self.next_item}_{self.score}_{gameinfo}.png"
         pil_image.save(os.path.join(self.save_dir, filename))
 
-    def get_score(self):
-        score = None
+    def get_score(self, take_screenshot=True):
+        score_str = None
+        score = 0
         check_time = 0
 
         while score is None and check_time < 2:
             score_region = self.latest_image[self.score_y:self.score_y + self.score_h, self.score_x:self.score_x + self.score_w]
             gray = cv2.cvtColor(score_region, cv2.COLOR_BGR2GRAY)
             _, thresh_image = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
-            score = reader.readtext(thresh_image)
+            score_str = reader.readtext(thresh_image)
             check_time += 1
-            if score is None and check_time < 2:
+            if score_str is None and check_time < 2 and take_screenshot:
                 time.sleep(1)
                 self.take_screenshot()
         
-        if score == [] or score is None:
-            return 0
-        # print(score)
+        if score_str == [] or score_str is None:
+            score = 0
+        else:
+            try:
+                if score_str[0][1].count(',') > 0:
+                    score = int(score_str[0][1].replace(',', ''))
+                else:
+                    score = int(score_str[0][1])
+                self.last_score = score
+            except ValueError:
+                return self.last_score
+        self.score = score
+        return self.score
 
-        score_str = score[0][1]  # get the first detected text
-        try:
-            if score_str.count(',') > 0:
-                score_number = int(score[0][1].replace(',', ''))
-            else:
-                score_number = int(score[0][1])
-            self.last_number = score_number
-        except ValueError:
-            return self.last_number
-        return score_number
-    
     def slot_region(self, pos_x, pos_y):
         slot_x = 70 + self.slot_gap * pos_x - (self.slot_size / 2)
         slot_y = 160 + self.slot_gap * pos_y - (self.slot_size / 2)
@@ -151,6 +154,8 @@ class playgame:
 
         next_item = self.latest_image[85:85 + 60, 508:508 + 60]
         next_item_id = self.find_matching_item(next_item)
+        self.state = slot_matrix
+        self.next_item = next_item_id
         return slot_matrix, next_item_id
 
     def slot_with_item(self, slot, item):
@@ -164,7 +169,7 @@ class playgame:
 
         return result
     
-    def split_result(self, result):
+    def slot_and_item(self, result):
         # split the 7x7 matrix into a 6x6 slot matrix and the item
         slot_matrix = np.full((6, 6), 0)
         slot_matrix[:3, :3] = result[:3, :3]
@@ -233,7 +238,6 @@ class playgame:
 
         return max(existing_ids) + 1
 
-    
     def is_game_end(self):
         template = cv2.imread('end_game_template.png', cv2.IMREAD_COLOR)
         result = cv2.matchTemplate(self.latest_image, template, cv2.TM_CCOEFF_NORMED)
@@ -247,14 +251,13 @@ class playgame:
             # print("no matching window found!")
             return False
         
-    def click_slot(self, pos_number):
+    def click_slot(self, action):
         # play game
-        self.save_image(self.latest_image, pos_number)
-
-        row, col = divmod(pos_number, 6)
+        self.save_image(self.latest_image, action)
+        row, col = divmod(action, 6)
         pyautogui.moveTo(self.game_x + self.slot_gap * col, self.game_y + self.slot_gap * row)
         pyautogui.click()
-        if pos_number in {2, 3}:
+        if action in {2, 3}:
             time.sleep(5.0)
         else:
             time.sleep(1.0)
