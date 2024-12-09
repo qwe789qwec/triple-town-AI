@@ -4,7 +4,7 @@ from collections import namedtuple, deque
 import pickle
 import random
 import torch
-from triple_town_game import playgame
+from triple_town_game import triple_town_handler
 
 Transition = namedtuple('Transition', ('state', 'action', 'score', 'next_state', 'next_score'))
 
@@ -22,7 +22,7 @@ BROAD_SIZE = 6
 class ReplayMemory:
     def __init__(self, capacity):
         self.memory = deque(maxlen=capacity)
-        self.game = playgame()
+        self.game = triple_town_handler()
         self.Transition = Transition
         self.EnhancedTransition = EnhancedTransition
 

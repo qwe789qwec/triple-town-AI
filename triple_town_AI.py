@@ -24,7 +24,7 @@ EPS_DECAY = 1000
 TAU = 0.005
 LR = 1e-4
 
-class TripleTownAI:
+class triple_town_AI:
     def __init__(self, 
                  item_type = ITEM_TYPE,
                  broad_size=BROAD_SIZE, 

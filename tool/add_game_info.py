@@ -6,7 +6,7 @@ import cv2
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from triple_town_game import playgame
+from triple_town_game import triple_town_handler
 
 game_folder = 'gameplay'
 image_files = sorted(
@@ -15,7 +15,7 @@ image_files = sorted(
 )
 current_state = None
 
-game = playgame()
+game = triple_town_handler()
 
 for image_file in image_files:
     if "_info_" in image_file:
@@ -26,7 +26,7 @@ for image_file in image_files:
         image_path = os.path.join(game_folder, image_file)
         game.latest_image = cv2.imread(image_path)
         state, next_item = game.get_game_area(take_screenshot=False)
-        score = game.get_score()
+        score = game.get_score(take_screenshot=False)
         if score == None:
             score = 0
 
