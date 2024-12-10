@@ -50,6 +50,7 @@ class triple_town_sim:
         self.next_item = state[0]
         self.state_matrix = state[1:].reshape(6, 6)
         self.time_matrix = np.zeros((6, 6), dtype=int)
+        self.reload_time(state)
         # self.last_action = 0
 
     def slot_item_bind(self, slot, item):
@@ -79,20 +80,41 @@ class triple_town_sim:
             if self.time_matrix[row, col] > 0:
                 self.time_matrix[i] += 1
         self.time_matrix[row, col] = 1
+    
+    def try_match(self, state1, state2):
+        state1_matrix = state1[1:].reshape(6, 6)
+        state2_matrix = state2[1:].reshape(6, 6)
+        timechange = set()
 
-    def compare_state(self, state1, state2):
-        count = 0
-        for i in range(37):
-            if state1[i] != state2[i]:
-                count += 1
-        return count
+        for i in range(36):
+            row, col = divmod(i, 6)
+            if state1_matrix[row, col] != state2_matrix[row, col]:
+                timechange.add((row, col))
+                if len(timechange) > 2:
+                    print("too many changes")
+                    self.reload_time(state2)
+                    return
+
+        bear_time = None
+        for r, c in timechange:
+            if state1_matrix[r, c] in {items["bear"], items["Nbear"]} and state2_matrix[r, c] == items["empty"]:
+                bear_time = self.time_matrix[r, c]
+                self.time_matrix[r, c] = 0
+                break
+
+        if bear_time is not None:
+            for r, c in timechange:
+                if state2_matrix[r, c] in {items["bear"], items["Nbear"]}:
+                    self.time_matrix[r, c] = bear_time
+
+        print("try match success")
+                
 
     def next_state_simulate(self, current_state, action):
-        if self.compare_state(self.last_state, current_state) > 1:
-            self.last_state = current_state
-            self.next_item = current_state[0]
-            self.state_matrix = current_state[1:].reshape(6, 6)
-            self.reload_time(current_state)
+        self.try_match(self.last_state, current_state)
+        self.last_state = current_state
+        self.next_item = current_state[0]
+        self.state_matrix = current_state[1:].reshape(6, 6)
             
         valid_mask = self.valid_action_mask(current_state)
         state, item = self.slot_item_split(current_state)
@@ -210,7 +232,6 @@ class triple_town_sim:
     def update_connected_elements(self, matrix, start_row, start_col):
         connected_list = self.find_connected_elements(matrix, start_row, start_col)
         item = matrix[start_row, start_col]
-        print("connected_list:", connected_list)
         while len(connected_list) >= 3:
             for r, c in connected_list:
                 matrix[r, c] = 0
@@ -265,7 +286,7 @@ class triple_town_sim:
         for i in range(36):
             row, col = divmod(i, 6)
             renew_row, renew_col = col, row
-            if matrix[renew_row, renew_col] == items["Nbear"]:
+            if matrix[renew_row, renew_col] == items["Nbear"] and (renew_row, renew_col) not in visited:
                 movelist = self.get_Nbear_moves(matrix, renew_row, renew_col)
                 if movelist[2] != []:
                     moveplace = random.choice(movelist[2])
@@ -301,28 +322,42 @@ class triple_town_sim:
             row, col = divmod(slot, 6)
             if matrix[row, col] == 0:
                 valid_moves.append((row, col))
-        print(valid_moves)
         return (bear_row, bear_col, valid_moves)
     
 sim_game = triple_town_sim(
-    state = np.array([1,
-         1,1,8,0,0,0,
-         1,0,2,7,0,2,
-         15,2,0,0,5,0,
+    state = np.array([2,
+         1,0,8,0,0,0,
+         0,3,0,7,0,2,
+         15,0,0,0,5,0,
          15,0,12,6,0,3,
          0,0,12,3,0,3,
-         0,12,13,0,2,2]))
+         0,12,13,11,2,2]))
 
 print(sim_game.state_matrix)
+action = 28
+next_state = sim_game.next_state_simulate(sim_game.last_state, action)
+print("====================================")
+print("next item:")
+print(sim_game.next_item)
+print("game state:")
+print(sim_game.state_matrix)
+print("time matrix:")
+print(sim_game.time_matrix)
 
-while True:
-    action = int(input("Enter action: "))
-    item = int(input("Enter item: "))
-    sim_game.last_state = sim_game.slot_item_bind(sim_game.state_matrix, item)
-    next_state = sim_game.next_state_simulate(sim_game.last_state, action)
-    print("====================================")
-    print("next item:")
-    print(sim_game.next_item)
-    print("game state:")
-    print(sim_game.state_matrix)
+realnext_item = items["grass"]
+realnext_state = np.array([realnext_item,
+            1,0,8,0,0,0,
+            0,3,0,7,0,2,
+            15,0,0,0,5,0,
+            15,11,12,6,0,0,
+            0,0,12,0,4,0,
+            0,12,13,0,0,0])
 
+next_state = sim_game.next_state_simulate(realnext_state, 23)
+print("====================================")
+print("next item:")
+print(sim_game.next_item)
+print("game state:")
+print(sim_game.state_matrix)
+print("time matrix:")
+print(sim_game.time_matrix)
