@@ -158,28 +158,6 @@ class triple_town_handler:
         self.next_item = next_item_id
         return slot_matrix, next_item_id
 
-    def slot_with_item(self, slot, item):
-        # create a 7x7 matrix with the item in the center
-        result = np.full((7, 7), 0)
-        result[:3, :3] = slot[:3, :3]   # top_left
-        result[:3, 4:] = slot[:3, 3:]   # top_right
-        result[4:, :3] = slot[3:, :3]   # bottom_left
-        result[4:, 4:] = slot[3:, 3:]   # bottom_right
-        result[3, 3] = item
-
-        return result
-    
-    def slot_and_item(self, result):
-        # split the 7x7 matrix into a 6x6 slot matrix and the item
-        slot_matrix = np.full((6, 6), 0)
-        slot_matrix[:3, :3] = result[:3, :3]
-        slot_matrix[:3, 3:] = result[:3, 4:]
-        slot_matrix[3:, :3] = result[4:, :3]
-        slot_matrix[3:, 3:] = result[4:, 4:]
-        item = result[3, 3]
-
-        return slot_matrix, item
-
     def find_matching_item(self, item_image):
         max_match_value = 0.6
         matching_item_id = None
