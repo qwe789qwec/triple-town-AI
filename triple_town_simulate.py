@@ -93,13 +93,13 @@ class triple_town_sim:
             current_nbear_count = np.count_nonzero(self.state_matrix == items["Nbear"])
 
             if target_bear_count != current_bear_count:
-                state_matrix = self.update_bear_move(state_matrix, items["bear"])
+                state_matrix[row, col] = items["bear"]
             elif target_nbear_count != current_nbear_count:
-                state_matrix = self.update_bear_move(state_matrix, items["Nbear"])
+                state_matrix[row, col] = items["Nbear"]
             else:
                 state_matrix[row, col] = self.state_matrix[row, col]
 
-        return self.slot_item_bind(state_matrix, state[0])  
+        return self.slot_item_bind(state_matrix, state[0])
     
     def try_match(self, state1, state2):
         self.fix_state(state2)
