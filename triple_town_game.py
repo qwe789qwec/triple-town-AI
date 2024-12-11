@@ -246,14 +246,15 @@ class triple_town_handler:
         pyautogui.click(self.start_x, self.start_y)
         time.sleep(5)
 
-# for testing
-# gamesc = playgame()
-# gamesc.take_screenshot()
-# gamesc.latest_image = cv2.imread('save/game_1_0.png')
-# gamesc.click_slot(0)
-# gamesc.take_screenshot()
-# gamesc.save_image(gamesc.latest_image, 12)
-# state , next_item = gamesc.get_game_area()
-# print("state:\n", state)
-# print("next_item:", next_item)
-# print(gamesc.get_score())
+test = False
+if test:
+    gamesc = triple_town_handler()
+    gamesc.take_screenshot()
+    gamesc.latest_image = cv2.imread('save/game_1_0.png')
+    gamesc.click_slot(0)
+    gamesc.take_screenshot()
+    gamesc.save_image(gamesc.latest_image, 12)
+    state , next_item = gamesc.get_game_area()
+    print("state:\n", state)
+    print("next_item:", next_item)
+    print(gamesc.get_score())
