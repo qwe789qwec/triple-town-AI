@@ -80,8 +80,29 @@ class triple_town_sim:
             if self.time_matrix[row, col] > 0:
                 self.time_matrix[i] += 1
         self.time_matrix[row, col] = 1
+
+    def fix_state(self, state):
+        state_matrix = state[1:].reshape(6, 6)
+        unknown_positions = [(row, col) for row in range(6) for col in range(6) 
+                            if state_matrix[row, col] == items["unknown"]]
+        
+        for row, col in unknown_positions:
+            target_bear_count = np.count_nonzero(state_matrix == items["bear"])
+            target_nbear_count = np.count_nonzero(state_matrix == items["Nbear"])
+            current_bear_count = np.count_nonzero(self.state_matrix == items["bear"])
+            current_nbear_count = np.count_nonzero(self.state_matrix == items["Nbear"])
+
+            if target_bear_count != current_bear_count:
+                state_matrix = self.update_bear_move(state_matrix, items["bear"])
+            elif target_nbear_count != current_nbear_count:
+                state_matrix = self.update_bear_move(state_matrix, items["Nbear"])
+            else:
+                state_matrix[row, col] = self.state_matrix[row, col]
+
+        return self.slot_item_bind(state_matrix, state[0])  
     
     def try_match(self, state1, state2):
+        self.fix_state(state2)
         state1_matrix = state1[1:].reshape(6, 6)
         state2_matrix = state2[1:].reshape(6, 6)
         timechange1 = set()
