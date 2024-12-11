@@ -84,28 +84,38 @@ class triple_town_sim:
     def try_match(self, state1, state2):
         state1_matrix = state1[1:].reshape(6, 6)
         state2_matrix = state2[1:].reshape(6, 6)
-        timechange = set()
+        timechange1 = set()
+        timechange2 = set()
 
         for i in range(36):
             row, col = divmod(i, 6)
             if state1_matrix[row, col] != state2_matrix[row, col]:
-                timechange.add((row, col))
-                if len(timechange) > 2:
-                    print("too many changes")
+                if state1_matrix[row, col] in {items["bear"], items["Nbear"]}:
+                    timechange1.add((row, col))
+                if state2_matrix[row, col] in {items["bear"], items["Nbear"]}:
+                    timechange2.add((row, col))
+                if not timechange1 and not timechange2:
+                    print("match fail")
                     self.reload_time(state2)
                     return
+        if len(timechange1) != len(timechange2):
+            print("match fail")
+            self.reload_time(state2)
+            return
+        if not timechange1 and not timechange2:
+            print("no change")
+            return
 
         bear_time = None
-        for r, c in timechange:
-            if state1_matrix[r, c] in {items["bear"], items["Nbear"]} and state2_matrix[r, c] == items["empty"]:
-                bear_time = self.time_matrix[r, c]
-                self.time_matrix[r, c] = 0
-                break
-
-        if bear_time is not None:
-            for r, c in timechange:
-                if state2_matrix[r, c] in {items["bear"], items["Nbear"]}:
-                    self.time_matrix[r, c] = bear_time
+        for r1, c1 in timechange1:
+            checktype = state1_matrix[r1, c1]
+            for r2, c2 in timechange2:
+                if state2_matrix[r2, c2] == checktype:
+                    bear_time = self.time_matrix[r1, c1]
+                    self.time_matrix[r2, c2] = bear_time
+                    self.time_matrix[r1, c1] = 0
+                    break
+            timechange2.remove((r2, c2))
 
         print("try match success")
                 
@@ -115,6 +125,16 @@ class triple_town_sim:
         self.last_state = current_state
         self.next_item = current_state[0]
         self.state_matrix = current_state[1:].reshape(6, 6)
+
+        print("================in sub====================")
+        print("action:")
+        print(action)
+        print("next item:")
+        print(self.next_item)
+        print("state:")
+        print(self.state_matrix)
+        print("time matrix:")
+        print(self.time_matrix)
             
         valid_mask = self.valid_action_mask(current_state)
         state, item = self.slot_item_split(current_state)
@@ -163,26 +183,16 @@ class triple_town_sim:
         
         # update bear
         state = self.check_bear_marge(state)
-        state = self.update_bear_move(state)
 
-        item_time = 99
-        check_r = 0
-        check_c = 0
-        for i in range(36):
-            row, col = divmod(i, 6)
-            if state[row, col] == items["tombstone"]:
-                connected_list = self.find_connected_elements(state, row, col)
-                if len(connected_list) >= 3:
-                    for r, c in connected_list:
-                        if self.time_matrix[r, c] < item_time:
-                            item_time = self.time_matrix(r, c)
-                            check_r = r
-                            check_c = c
-                    self.update_connected_elements(state, check_r, check_c)
+        state = self.update_bear_move(state, items["bear"])
+        state = self.update_bear_move(state, items["Nbear"])
 
         self.last_state = self.slot_item_bind(state, item)
         self.state_matrix = state
-        self.next_item = item
+        self.next_item = np.random.choice(
+            [items["grass"], items["bush"], items["tree"], items["hut"], items["bear"], items["Nbear"], items["crystal"], items["bot"]],
+            p=[0.605, 0.155, 0.02, 0.005, 0.15, 0.015, 0.025, 0.025]
+        )
         return self.last_state
 
     def valid_action_mask(self, state_all, block = False):
@@ -258,43 +268,41 @@ class triple_town_sim:
                 if movelist == []:
                     for r, c in connected_list:
                         matrix[r, c] = items["tombstone"]
+        item_time = 99
+        check_r = 0
+        check_c = 0
         for i in range(36):
             row, col = divmod(i, 6)
             if matrix[row, col] == items["tombstone"]:
                 connected_list = self.find_connected_elements(matrix, row, col)
+                if len(connected_list) >= 3:
+                    for r, c in connected_list:
+                        if self.time_matrix[r, c] < item_time:
+                            item_time = self.time_matrix(r, c)
+                            check_r = r
+                            check_c = c
+                    self.update_connected_elements(matrix, check_r, check_c)
         return matrix
 
-    def update_bear_move(self, matrix):
+    def update_bear_move(self, matrix, beartype):
         visited = set()
         movelist = []
         for i in range(36):
             row, col = divmod(i, 6)
             renew_row, renew_col = col, row
-            if matrix[renew_row, renew_col] == items["bear"] and (renew_row, renew_col) not in visited:
-                movelist = self.get_bear_moves(matrix, renew_row, renew_col)
+            if matrix[renew_row, renew_col] == beartype and (renew_row, renew_col) not in visited:
+                if beartype == items["bear"]:
+                    movelist = self.get_bear_moves(matrix, renew_row, renew_col)
+                elif beartype == items["Nbear"]:
+                    movelist = self.get_Nbear_moves(matrix, renew_row, renew_col)
                 if movelist[2] != []:
                     moveplace = random.choice(movelist[2])
                     matrix[renew_row, renew_col] = items["empty"]
-                    matrix[moveplace[0], moveplace[1]] = items["bear"]
-                    self.time_matrix[moveplace[0], moveplace[1]] = self.time_matrix[row, col]
+                    matrix[moveplace[0], moveplace[1]] = beartype
+                    beartime = self.time_matrix[renew_row, renew_col]
+                    self.time_matrix[moveplace[0], moveplace[1]] = beartime
+                    self.time_matrix[renew_row, renew_col] = 0
                     visited.add((moveplace[0], moveplace[1]))
-                    self.time_matrix[row, col] = 0
-                else:
-                    visited.add((renew_row, renew_col))
-        visited = set()
-        movelist = []
-        for i in range(36):
-            row, col = divmod(i, 6)
-            renew_row, renew_col = col, row
-            if matrix[renew_row, renew_col] == items["Nbear"] and (renew_row, renew_col) not in visited:
-                movelist = self.get_Nbear_moves(matrix, renew_row, renew_col)
-                if movelist[2] != []:
-                    moveplace = random.choice(movelist[2])
-                    matrix[renew_row, renew_col] = items["empty"]
-                    matrix[moveplace[0], moveplace[1]] = items["Nbear"]
-                    self.time_matrix[moveplace[0], moveplace[1]] = self.time_matrix[row, col]
-                    visited.add((moveplace[0], moveplace[1]))
-                    self.time_matrix[row, col] = 0
                 else:
                     visited.add((renew_row, renew_col))
         return matrix
@@ -336,7 +344,7 @@ sim_game = triple_town_sim(
 print(sim_game.state_matrix)
 action = 28
 next_state = sim_game.next_state_simulate(sim_game.last_state, action)
-print("====================================")
+print("==================after==================")
 print("next item:")
 print(sim_game.next_item)
 print("game state:")
@@ -354,7 +362,7 @@ realnext_state = np.array([realnext_item,
             0,12,13,0,0,0])
 
 next_state = sim_game.next_state_simulate(realnext_state, 23)
-print("====================================")
+print("=================after===================")
 print("next item:")
 print(sim_game.next_item)
 print("game state:")
