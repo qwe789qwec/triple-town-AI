@@ -20,13 +20,38 @@ items = {
     "treasure": 15,
     "Ltreasure": 16,
     "bot": 17,
-    "rock": 18,
-    "monutain": 19,
+    "mountain": 18,
+    "rock": 19,
     "crystal": 20,
     "unknown": 21
 }
 
 ritem = {value: key for key, value in items.items()}
+
+item_picture = {
+    "0": "🔲",
+    "1": "🌱",
+    "2": "🌳",
+    "3": "🌲",
+    "4": "🗼",
+    "5": "🏠",
+    "6": "🏫",
+    "7": "🏬",
+    "8": "🏯",
+    "9": "🏰",
+    "10": "🐻",
+    "11": "🐼",
+    "12": "⚰️",
+    "13": "⛪",
+    "14": "🕍",
+    "15": "💰",
+    "16": "👑",
+    "17": "🤖",
+    "18": "⛰️",
+    "19": "🪨 ",
+    "20": "💎",
+    "21": "? "
+}
 
 upgrade = {
     "grass": "bush",
@@ -40,18 +65,39 @@ upgrade = {
     "tombstone": "church",
     "church": "cathedral",
     "cathedral": "treasure",
+    "rock":"mountain",
     "treasure": "Ltreasure",
-    "monutain": "Ltreasure",
+    "mountain": "Ltreasure",
 }
 
 class triple_town_sim:
-    def __init__(self, state = np.zeros(37, dtype=int)):
+    def __init__(self, state = None):
+        self.memory = None
+        self.memory_time = None
+        self.random_item = None
+        if state is None:
+            state = self.random_init()
         self.last_state = state
         self.next_item = state[0]
         self.state_matrix = state[1:].reshape(6, 6)
         self.time_matrix = np.zeros((6, 6), dtype=int)
         self.reload_time(state)
         # self.last_action = 0
+
+    def random_init(self):
+        random_item = np.random.choice(
+            [items["grass"], items["bush"], items["tree"], items["hut"], items["bear"], items["Nbear"], items["crystal"], items["bot"]],
+            p=[0.605, 0.155, 0.02, 0.005, 0.15, 0.015, 0.025, 0.025]
+        )
+        state_matrix = np.random.choice(
+            [items["empty"], items["grass"], items["bush"], items["tree"], items["hut"], items["bear"], items["rock"]],
+            p=[0.34, 0.355, 0.155, 0.02, 0.005, 0.10, 0.025],
+            size=(6, 6)
+        )
+        state = np.zeros(37, dtype=int)
+        state[0] = random_item
+        state[1:] = state_matrix.flatten()
+        return state
 
     def slot_item_bind(self, slot, item):
         state = np.zeros(37, dtype=int)
@@ -77,8 +123,9 @@ class triple_town_sim:
 
     def add_new_item(self, row, col):
         for i in range(36):
-            if self.time_matrix[row, col] > 0:
-                self.time_matrix[i] += 1
+            r, c = divmod(i, 6)
+            if self.time_matrix[r, c] > 0:
+                self.time_matrix[r, c] += 1
         self.time_matrix[row, col] = 1
 
     def fix_state(self, state):
@@ -136,31 +183,61 @@ class triple_town_sim:
             timechange2.remove((r2, c2))
 
     def next_state_simulate(self, current_state, action):
-        self.try_match(self.last_state, current_state)
-        self.last_state = current_state
-        self.next_item = current_state[0]
-        self.state_matrix = current_state[1:].reshape(6, 6)
-            
         valid_mask = self.valid_action_mask(current_state)
         state, item = self.slot_item_split(current_state)
 
         if valid_mask[action] == 0:
-            return state
+            print("Invalid action")
+            return current_state
         
+        # if action is -1, return to last state
+        if action == -1:
+            if self.memory is not None:
+                self.random_item = current_state[0]
+                self.time_matrix = self.memory_time.copy()
+                self.last_state = self.memory.copy()
+                self.state_matrix = self.memory.copy()[1:].reshape(6, 6)
+                self.next_item = self.memory.copy()[0]
+                return self.memory
+            else:
+                return current_state
+        else:
+            self.random_item = None
+            self.memory = current_state.copy()
+            self.memory_time = self.time_matrix.copy()
+
+        self.try_match(self.last_state, current_state)
+        self.last_state = current_state
+        self.next_item = current_state[0]
+        self.state_matrix = current_state[1:].reshape(6, 6)
+
         # if action is 0, then swap the item
         if action == 0:
             store_item = state[0][0]
             state[0][0] = item
             item = int(store_item)
-            return self.slot_item_bind(state, item)
+            if item == items["empty"]:
+                item = np.random.choice(
+                    [items["grass"], items["bush"], items["tree"], items["hut"], items["bear"], items["Nbear"], items["crystal"], items["bot"]],
+                    p=[0.605, 0.155, 0.02, 0.005, 0.15, 0.015, 0.025, 0.025]
+                )
+            self.state_matrix = state
+            self.next_item = item
+            self.last_state = self.slot_item_bind(state, item)
+            return self.last_state
         
         row, col = divmod(action, 6)
+
+        if state[row, col] == items["treasure"] or state[row, col] == items["Ltreasure"]:
+            state[row, col] = 0
+            self.time_matrix[row, col] = 0
+            return self.slot_item_bind(state, item)
         
         # update bot
         if item == items["bot"]:
             if state[row, col] == items["bear"] or state[row, col] == items["Nbear"]:
                 state[row, col] = items["tombstone"]
-            elif state[row, col] == items["monutain"]:
+            elif state[row, col] == items["mountain"]:
                 state[row, col] = items["treasure"]
             else:
                 state[row, col] = items["empty"]
@@ -176,9 +253,11 @@ class triple_town_sim:
         # update crystal
         if state[row, col] == 20:
             rock_check = True
-            for i in {"Fcastle", "castle", "mountain", "treasure", "mansion", "cathedral", "church", "house", "hut", "rock", "tomstone", "tree", "bush", "grass"}:
+            for i in ["Fcastle", "castle", "mountain", "treasure", "mansion", "cathedral", "church", "house", "hut", "tombstone", "rock", "tree", "bush", "grass"]:
                 state[row, col] = items[i]
                 connected_list = self.find_connected_elements(state, row, col)
+                if i == "Fcastle" and len(connected_list) < 4:
+                    continue
                 if len(connected_list) >= 3:
                     state = self.update_connected_elements(state, row, col)
                     rock_check = False
@@ -192,12 +271,15 @@ class triple_town_sim:
         state = self.update_bear_move(state, items["bear"])
         state = self.update_bear_move(state, items["Nbear"])
 
-        self.last_state = self.slot_item_bind(state, item)
         self.state_matrix = state
-        self.next_item = np.random.choice(
-            [items["grass"], items["bush"], items["tree"], items["hut"], items["bear"], items["Nbear"], items["crystal"], items["bot"]],
-            p=[0.605, 0.155, 0.02, 0.005, 0.15, 0.015, 0.025, 0.025]
-        )
+        if self.random_item is None:
+            self.next_item = np.random.choice(
+                [items["grass"], items["bush"], items["tree"], items["hut"], items["bear"], items["Nbear"], items["crystal"], items["bot"]],
+                p=[0.605, 0.155, 0.02, 0.005, 0.15, 0.015, 0.025, 0.025]
+            )
+        else:
+            self.next_item = self.random_item
+        self.last_state = self.slot_item_bind(self.state_matrix, self.next_item)
         return self.last_state
 
     def valid_action_mask(self, state_all, block = False):
@@ -248,6 +330,8 @@ class triple_town_sim:
         connected_list = self.find_connected_elements(matrix, start_row, start_col)
         item = matrix[start_row, start_col]
         while len(connected_list) >= 3:
+            if item == items["Fcastle"] and len(connected_list) < 4:
+                return matrix
             for r, c in connected_list:
                 matrix[r, c] = 0
                 self.time_matrix[r, c] = 0
@@ -259,20 +343,21 @@ class triple_town_sim:
     
     def check_bear_marge(self, matrix):
         visited = set()
-        movelist = []
-        for i in range(36):
-            row, col = divmod(i, 6)
+        movenumber = 0
+        for i in range(35):
+            row, col = divmod(i+1, 6)
             if (matrix[row, col] == items["bear"] or matrix[row, col] == items["Nbear"]) and (row, col) not in visited:
                 connected_list = self.find_connected_elements(matrix, row, col)
                 for r, c in connected_list:
                     if matrix[r, c] == items["bear"]:
-                        movelist = movelist.append(self.get_bear_moves(matrix, r, c))
+                        movenumber += len(self.get_bear_moves(matrix, r, c)[2])
                     elif matrix[r, c] == items["Nbear"]:
-                        movelist = movelist.append(self.get_Nbear_moves(matrix, r, c))
+                        movenumber += len(self.get_Nbear_moves(matrix, r, c)[2])
                     visited.add((r, c))
-                if movelist == []:
+                if movenumber == 0:
                     for r, c in connected_list:
                         matrix[r, c] = items["tombstone"]
+                movenumber = 0
         item_time = 99
         check_r = 0
         check_c = 0
@@ -283,7 +368,7 @@ class triple_town_sim:
                 if len(connected_list) >= 3:
                     for r, c in connected_list:
                         if self.time_matrix[r, c] < item_time:
-                            item_time = self.time_matrix(r, c)
+                            item_time = self.time_matrix[r, c]
                             check_r = r
                             check_c = c
                     self.update_connected_elements(matrix, check_r, check_c)
@@ -292,8 +377,8 @@ class triple_town_sim:
     def update_bear_move(self, matrix, beartype):
         visited = set()
         movelist = []
-        for i in range(36):
-            row, col = divmod(i, 6)
+        for i in range(35):
+            row, col = divmod(i+1, 6)
             renew_row, renew_col = col, row
             if matrix[renew_row, renew_col] == beartype and (renew_row, renew_col) not in visited:
                 if beartype == items["bear"]:
@@ -331,30 +416,40 @@ class triple_town_sim:
     def get_Nbear_moves(self, matrix, bear_row, bear_col):
         valid_moves = []
         for i in range(35):
-            slot = i + 1
-            row, col = divmod(slot, 6)
+            row, col = divmod(i + 1, 6)
             if matrix[row, col] == 0:
                 valid_moves.append((row, col))
         return (bear_row, bear_col, valid_moves)
+    
+    def console_print(self, state):
+        state_matrix = state[1:].reshape(6, 6)
+        next_item = state[0]
+        print("next item:", item_picture[str(next_item)])
+        # print action index in front of item
+        for i in range(36):
+            row, col = divmod(i, 6)
+            print(f"{i}:".rjust(3), end=" ")
+            print(item_picture[str(state_matrix[row, col])].rjust(1), end=" ")
+            if col == 5:
+                print()
 
-test = False
+test = True
 
 if test:
     sim_game = triple_town_sim(
-        state = np.array([1,
-            0,0,0,0,0,0,
-            0,4,2,1,0,0,
-            0,4,0,0,0,0,
-            1,1,19,0,0,19,
-            0,0,0,0,1,0,
-            1,12,0,0,0,1]))
+        state = np.array([ 1,
+            1 ,0 ,8 ,0 ,0 ,0 ,
+            0 ,0 ,0 ,4 ,4 ,1 ,
+            0 ,0 ,4 ,0 ,0 ,2 ,
+            4 ,0 ,4 ,1 ,1 ,15,
+            0 ,1 ,3 ,0 ,10,11,
+            11,2 ,0 ,13,13,14]))
+    state = sim_game.last_state
     while True:
-        print("next item:")
-        print(sim_game.next_item)
-        print("state:")
-        print(sim_game.state_matrix)
-        action = int(input("action: "))
+        sim_game.console_print(state)
+        action = int(input("action:"))
         state = sim_game.next_state_simulate(sim_game.last_state, action)
+        print("=============================================================")
     
 
 
