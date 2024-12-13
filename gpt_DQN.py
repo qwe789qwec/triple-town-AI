@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -93,7 +93,8 @@ for episode in range(episodes):
     while True:
         # 选择动作
         action = select_action(state, epsilon)
-        next_state, reward, done, _ = env.step(action)
+        next_state, reward, terminated, truncated, _ = env.step(action)
+        done = terminated or truncated
 
         # 存储经验
         memory.append((state, action, reward, next_state, done))
