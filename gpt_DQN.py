@@ -50,6 +50,10 @@ def select_action(state, epsilon):
     if random.random() < epsilon:
         return random.randint(0, action_size - 1)
     else:
+        if isinstance(state, tuple):
+            state = state[0]
+        else:
+            state = state
         state = torch.FloatTensor(state).unsqueeze(0)
         with torch.no_grad():
             return policy_net(state).argmax().item()
@@ -62,7 +66,16 @@ def optimize_model():
     batch = random.sample(memory, batch_size)
     states, actions, rewards, next_states, dones = zip(*batch)
 
-    states = torch.FloatTensor(states)
+    filtered_states = []
+    for state in states:
+        if isinstance(state, tuple):
+            filtered_states.append(state[0])
+        elif isinstance(state, np.ndarray):
+            filtered_states.append(state)
+
+    # 将过滤后的数组转换为张量
+    states = torch.FloatTensor(np.array(filtered_states))
+    # print("states:", states.shape)
     actions = torch.LongTensor(actions).unsqueeze(1)
     rewards = torch.FloatTensor(rewards).unsqueeze(1)
     next_states = torch.FloatTensor(next_states)
@@ -97,7 +110,7 @@ for episode in range(episodes):
         done = terminated or truncated
 
         # 存储经验
-        memory.append((state, action, reward, next_state, done))
+        memory.append((state, action, [reward], next_state, done))
         state = next_state
         total_reward += reward
 
