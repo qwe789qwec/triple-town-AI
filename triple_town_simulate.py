@@ -476,6 +476,7 @@ if test:
         sim_game.console_print(state)
         action = int(input("action:"))
         state = sim_game.next_state_simulate(sim_game.last_state, action)
+        print("game score:", sim_game.game_score)
         print("=============================================================")
         if state is None:
             print("Game Over")
