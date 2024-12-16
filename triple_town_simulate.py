@@ -83,6 +83,8 @@ class triple_town_sim:
         self.next_item = state[0]
         self.state_matrix = state[1:].reshape(6, 6)
         self.time_matrix = np.zeros((6, 6), dtype=int)
+        self.game_score = 0
+        self.last_game_score = 0
         self.reload_time(state)
         # self.last_action = 0
 
@@ -200,6 +202,7 @@ class triple_town_sim:
                 self.last_state = self.memory.copy()
                 self.state_matrix = self.memory.copy()[1:].reshape(6, 6)
                 self.next_item = self.memory.copy()[0]
+                self.game_score = self.last_game_score
                 return self.memory
             else:
                 return current_state
@@ -207,6 +210,7 @@ class triple_town_sim:
             self.random_item = None
             self.memory = current_state.copy()
             self.memory_time = self.time_matrix.copy()
+            self.last_game_score = self.game_score
 
         if valid_mask[action] == 0:
             print("Invalid action")
@@ -329,6 +333,7 @@ class triple_town_sim:
         while len(connected_list) >= 3:
             if item == items["Fcastle"] and len(connected_list) < 4:
                 return matrix
+            self.gamescore += 1
             for r, c in connected_list:
                 matrix[r, c] = 0
                 self.time_matrix[r, c] = 0
@@ -455,7 +460,7 @@ class triple_town_sim:
             if col == 5:
                 print()
 
-test = False
+test = True
 
 if test:
     sim_game = triple_town_sim(
