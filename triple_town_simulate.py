@@ -188,6 +188,10 @@ class triple_town_sim:
         valid_mask = self.valid_action_mask(current_state)
         state, item = self.slot_item_split(current_state)
         
+        if sum(valid_mask) == 1:
+            print("No valid action")
+            return None
+
         # if action is -1, return to last state
         if action == -1:
             if self.memory is not None:
@@ -451,7 +455,7 @@ class triple_town_sim:
             if col == 5:
                 print()
 
-test = True
+test = False
 
 if test:
     sim_game = triple_town_sim(
@@ -468,6 +472,9 @@ if test:
         action = int(input("action:"))
         state = sim_game.next_state_simulate(sim_game.last_state, action)
         print("=============================================================")
+        if state is None:
+            print("Game Over")
+            break
     
 
 
