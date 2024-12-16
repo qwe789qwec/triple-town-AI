@@ -70,6 +70,8 @@ upgrade = {
     "mountain": "Ltreasure",
 }
 
+downgrade = {value: key for key, value in upgrade.items()}
+
 class triple_town_sim:
     def __init__(self, state = None):
         self.memory = None
@@ -185,10 +187,6 @@ class triple_town_sim:
     def next_state_simulate(self, current_state, action):
         valid_mask = self.valid_action_mask(current_state)
         state, item = self.slot_item_split(current_state)
-
-        if valid_mask[action] == 0:
-            print("Invalid action")
-            return current_state
         
         # if action is -1, return to last state
         if action == -1:
@@ -205,6 +203,10 @@ class triple_town_sim:
             self.random_item = None
             self.memory = current_state.copy()
             self.memory_time = self.time_matrix.copy()
+
+        if valid_mask[action] == 0:
+            print("Invalid action")
+            return current_state
 
         self.try_match(self.last_state, current_state)
         self.last_state = current_state
@@ -252,18 +254,7 @@ class triple_town_sim:
 
         # update crystal
         if state[row, col] == 20:
-            rock_check = True
-            for i in ["Fcastle", "castle", "mountain", "treasure", "mansion", "cathedral", "church", "house", "hut", "tombstone", "rock", "tree", "bush", "grass"]:
-                state[row, col] = items[i]
-                connected_list = self.find_connected_elements(state, row, col)
-                if i == "Fcastle" and len(connected_list) < 4:
-                    continue
-                if len(connected_list) >= 3:
-                    state = self.update_connected_elements(state, row, col)
-                    rock_check = False
-                    break
-            if rock_check:
-                state[row, col] = items["rock"]
+            state = self.update_crystal(state, row, col)
         
         # update bear
         state = self.check_bear_marge(state)
@@ -329,6 +320,8 @@ class triple_town_sim:
     def update_connected_elements(self, matrix, start_row, start_col):
         connected_list = self.find_connected_elements(matrix, start_row, start_col)
         item = matrix[start_row, start_col]
+        if item == items["Tcastle"]:
+            return matrix
         while len(connected_list) >= 3:
             if item == items["Fcastle"] and len(connected_list) < 4:
                 return matrix
@@ -339,6 +332,31 @@ class triple_town_sim:
             self.add_new_item(start_row, start_col)
             connected_list = self.find_connected_elements(matrix, start_row, start_col)
             item = matrix[start_row, start_col]
+        return matrix
+    
+    def update_crystal(self, matrix, row, col):
+        marge_list = []
+        for i in ["Fcastle", "castle", "mountain", "treasure", "mansion", "cathedral", "church", "house", "hut", "tombstone", "rock", "tree", "bush", "grass"]:
+            matrix[row, col] = items[i]
+            connected_list = self.find_connected_elements(matrix, row, col)
+            if i == "Fcastle" and len(connected_list) >= 4:
+                marge_list.append(i)
+                continue
+            if len(connected_list) >= 3:
+                marge_list.append(i)
+
+        if len(marge_list) == 0:
+            matrix[row, col] = items["rock"]
+        else:
+            marge_item = marge_list[0]
+            while downgrade[marge_item] in marge_list:
+                marge_item = downgrade[marge_item]
+                if marge_item == "grass" or marge_item == "tomstone" or marge_item == "rock":
+                    break
+            matrix[row, col] = items[marge_item]
+            print(f"crystal marge to {marge_item}")
+            self.update_connected_elements(matrix, row, col)
+
         return matrix
     
     def check_bear_marge(self, matrix):
