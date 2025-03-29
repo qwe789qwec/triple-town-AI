@@ -10,18 +10,19 @@ from pathlib import Path
 
 reader = easyocr.Reader(['en'], gpu = True)
 
-class triple_town_handler:
-    def __init__(self, save_dir='gameplay'):
+class TripleTownHandler:
+    def __init__(self, screen_dir='gameplay', output_dir='output'):
         self.step = 0
-        self.save_dir = save_dir
-        self.game_number = self.get_next_game_number()
+        self.screen_dir = screen_dir
+        self.output_dir = output_dir
         self.init_mouse_position()
-        # slot for game and recognize
-        self.slot_gap = 80
-        self.slot_size = 60
 
-        self.score = 0
-        self.last_score = 0
+        # self.game_number = self.get_next_game_number()
+        # self.slot_gap = 80
+        # self.slot_size = 60
+
+        # self.score = 0
+        # self.last_score = 0
 
     def init_mouse_position(self):
         # get window position

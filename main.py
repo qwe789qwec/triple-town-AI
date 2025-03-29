@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 import triple_town_model
 from triple_town_AI import triple_town_AI
-from triple_town_game import triple_town_handler
+from triple_town_game import TripleTownHandler
 
 device = torch.device(
     "cuda" if torch.cuda.is_available() else
@@ -28,7 +28,7 @@ MEMORY_SIZE = 10000
 LOAD_SIZE = 500
 SKIP_GAME = 0
 
-game = triple_town_handler()
+game = TripleTownHandler()
 
 tpai = triple_town_AI(
     item_type=ITEM_TYPE,
