@@ -72,7 +72,7 @@ upgrade = {
 
 downgrade = {value: key for key, value in upgrade.items()}
 
-class triple_town_sim:
+class TripleTownSim:
     def __init__(self, state = None):
         self.memory = None
         self.memory_time = None
@@ -101,6 +101,22 @@ class triple_town_sim:
         state = np.zeros(37, dtype=int)
         state[0] = random_item
         state[1:] = state_matrix.flatten()
+        state[1] = 0
+        return state
+    
+    def reset(self):
+        self.memory = None
+        self.memory_time = None
+        self.random_item = None
+        state = self.random_init()
+        self.last_state = state
+        self.next_item = state[0]
+        self.state_matrix = state[1:].reshape(6, 6)
+        self.time_matrix = np.zeros((6, 6), dtype=int)
+        self.game_score = 0
+        self.last_game_score = 0
+        self.reload_time(state)
+
         return state
 
     def slot_item_bind(self, slot, item):
@@ -460,10 +476,10 @@ class triple_town_sim:
             if col == 5:
                 print()
 
-test = True
+test = False
 
 if test:
-    sim_game = triple_town_sim(
+    sim_game = TripleTownSim(
         state = np.array([ 1,
             1 ,0 ,8 ,0 ,0 ,0 ,
             0 ,0 ,0 ,4 ,4 ,1 ,

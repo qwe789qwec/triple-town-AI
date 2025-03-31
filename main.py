@@ -1,140 +1,108 @@
-import time
-from itertools import count
-
+from triple_town_simulate import TripleTownSim
+import random
+import numpy as np
 import torch
+import torch.nn as nn
+import torch.optim as optim
 import torch.nn.functional as F
+from collections import deque
 
-import triple_town_model
-from triple_town_AI import triple_town_AI
-from triple_town_game import TripleTownHandler
-
-device = torch.device(
-    "cuda" if torch.cuda.is_available() else
-    "mps" if torch.backends.mps.is_available() else
-    "cpu"
-)
-
-BROAD_SIZE = 6
-ACTION_SPACE = BROAD_SIZE * BROAD_SIZE
-ITEM_TYPE = 22
-BATCH_SIZE = 300
-GAMMA = 0.99
-EPS_START = 0.9
-EPS_END = 0.05
-EPS_DECAY = 10
-TAU = 0.005
-LR = 1e-4
+# 超參數
+GAMMA = 0.99  # 折扣因子
+LR = 0.001  # 學習率
+EPSILON = 0.1  # 探索機率
+BATCH_SIZE = 32
 MEMORY_SIZE = 10000
-LOAD_SIZE = 500
-SKIP_GAME = 0
+TARGET_UPDATE = 10  # 更新目標網絡的頻率
 
-game = TripleTownHandler()
+# 簡單的 DQN 網絡
+class DQN(nn.Module):
+    def __init__(self, state_dim, action_dim):
+        super(DQN, self).__init__()
+        self.fc1 = nn.Linear(state_dim, 128)
+        self.fc2 = nn.Linear(128, 128)
+        self.fc3 = nn.Linear(128, action_dim)
 
-tpai = triple_town_AI(
-    item_type=ITEM_TYPE,
-    broad_size=BROAD_SIZE,
-    batch_size=BATCH_SIZE,
-    gamma=GAMMA,
-    eps_start=EPS_START,
-    eps_end=EPS_END,
-    eps_decay=EPS_DECAY,
-    tau=TAU,
-    learning_rate=LR,
-    memory_size=MEMORY_SIZE
-)
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return self.fc3(x)
 
-tpai.load_model()
-# tpai.memory.load_memory()
-# tpai.optimize_model()
-# tpai.load_memory(LOAD_SIZE, SKIP_GAME)
-# tpai.memory.save_memory()
-
-# if len(tpai.memory.sample()) > BATCH_SIZE:
-#     for i in range(len(tpai.memory.sample())-BATCH_SIZE):
-#         tpai.optimize_model()
-#         tpai.update_model()
-#         print("optimize model and update model:", i)
-# print("finish optimize model and update model")
-
-# tpai.save_model()
-
-if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 20
-    torch.cuda.empty_cache()
-else:
-    num_episodes = 3
-
-# memory = load_memory_json()
-# print("memory length:", len(memory))
-
-for i_episode in range(num_episodes):
-    # Initialize the environment and get its state
-    game.take_screenshot()
-    state, next_item = game.get_game_area()
-    all_state = game.slot_with_item(state, next_item)
-    state_tensor = torch.tensor(all_state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
-    top_reward = 1
-    score = game.get_score()
-    if score == None:
-        game.take_screenshot()
-        score = game.get_score()
-        if score == None:
-            score = 0
-
-    for t in count():
-
-        print("state:\n", state)
-        print("next_item:", next_item)
-        action = tpai.select_action(state_tensor)
-        game.click_slot(action.item())
-
-        print("action:", action.item())
-        print("game_step:", t)
-        print("=============================================================")
-
-        game.take_screenshot()
-        if(game.is_game_end()):
-            new_state_tensor = None
-            new_score = None
-            game.save_image(game.latest_image)
-            game.game_number = game.get_next_game_number()
-            game.step = 0
-            game.restart_game()
-        else:
-            new_score = game.get_score()
-            if new_score == None:
-                time.sleep(1)
-                game.take_screenshot()
-                new_score = game.get_score()
-                if new_score == None:
-                    new_score = 0
-            new_state, new_next_item = game.get_game_area()
-            all_new_state = game.slot_with_item(new_state, new_next_item)
-            new_state_tensor = torch.tensor(all_new_state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
-            score_tensor = torch.tensor([score], device=device)
-            new_score_tensor = torch.tensor([new_score], device=device)
-
-        tpai.memory.push(state_tensor, 
-                         action.unsqueeze(0).unsqueeze(0), 
-                         score_tensor, 
-                         new_state_tensor, 
-                         new_score_tensor)
-
-        state = new_state
-        next_item = new_next_item
-        state_tensor = new_state_tensor
-        score_tensor = new_score_tensor
+# 簡單的 DQN 代理
+class DQNAgent:
+    def __init__(self, state_dim, action_dim):
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.memory = deque(maxlen=MEMORY_SIZE)
         
-        # Perform one step of the optimization (on the policy network)
-        tpai.optimize_model()
+        self.policy_net = DQN(state_dim, action_dim).cuda()
+        self.target_net = DQN(state_dim, action_dim).cuda()
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=LR)
 
-        # Soft update of the target network's weights
-        # θ′ ← τ θ + (1 −τ )θ′
-        tpai.update_model()
+    def select_action(self, state):
+        if random.random() < EPSILON:
+            return random.randint(0, self.action_dim - 1)  # 隨機探索
+        else:
+            with torch.no_grad():
+                state = torch.tensor(state, dtype=torch.float32).cuda().unsqueeze(0)
+                return torch.argmax(self.policy_net(state)).item()  # 選擇最優動作
 
-        if new_state_tensor is None:
+    def store_transition(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
+
+    def train(self):
+        if len(self.memory) < BATCH_SIZE:
+            return
+        
+        batch = random.sample(self.memory, BATCH_SIZE)
+        state, action, reward, next_state, done = zip(*batch)
+        
+        state = torch.tensor(state, dtype=torch.float32).cuda()
+        action = torch.tensor(action, dtype=torch.long).cuda().unsqueeze(1)
+        reward = torch.tensor(reward, dtype=torch.float32).cuda()
+        next_state = torch.tensor(next_state, dtype=torch.float32).cuda()
+        done = torch.tensor(done, dtype=torch.float32).cuda()
+
+        q_values = self.policy_net(state).gather(1, action).squeeze()
+        next_q_values = self.target_net(next_state).max(1)[0].detach()
+        target_q_values = reward + (1 - done) * GAMMA * next_q_values
+
+        loss = F.mse_loss(q_values, target_q_values)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+    def update_target_network(self):
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+
+# 訓練 DQN
+env = TripleTownSim()
+
+hand_item = 8
+stock_item = 9
+slot_item = 21 * 35
+agent = DQNAgent(state_dim=hand_item + stock_item + slot_item, action_dim=6*6)
+
+for episode in range(1000):
+    state = env.reset()
+    total_reward = 0
+
+    for t in range(100):  # 限制最大回合數，防止無限循環
+        action = agent.select_action(state)
+        next_state, reward, done = env.next_state_simulate(action)
+        
+        agent.store_transition(state, action, reward, next_state, done)
+        agent.train()
+        total_reward += reward
+
+        state = next_state
+        if done:
             break
-    tpai.save_model()
-    tpai.memory.save_memory()
 
-print('Complete')
+    if episode % TARGET_UPDATE == 0:
+        agent.update_target_network()
+
+    print(f"Episode {episode}, Total Reward: {total_reward}")
+
+print("訓練完成！")
