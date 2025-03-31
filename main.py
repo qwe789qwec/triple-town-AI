@@ -57,11 +57,11 @@ class DQNAgent:
         
         batch = random.sample(self.memory, BATCH_SIZE)
         state, action, reward, next_state, done = zip(*batch)
-        
-        state = torch.tensor(state, dtype=torch.float32).cuda()
+
+        state = torch.tensor(np.array(state), dtype=torch.float32).cuda()
         action = torch.tensor(action, dtype=torch.long).cuda().unsqueeze(1)
         reward = torch.tensor(reward, dtype=torch.float32).cuda()
-        next_state = torch.tensor(next_state, dtype=torch.float32).cuda()
+        next_state = torch.tensor(np.array(next_state), dtype=torch.float32).cuda()
         done = torch.tensor(done, dtype=torch.float32).cuda()
 
         q_values = self.policy_net(state).gather(1, action).squeeze()
