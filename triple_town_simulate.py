@@ -229,7 +229,7 @@ class TripleTownSim:
             self.last_game_score = self.game_score
 
         if valid_mask[action] == 0:
-            print("Invalid action")
+            # print("Invalid action")
             return current_state
 
         self.try_match(self.last_state, current_state)
@@ -297,6 +297,15 @@ class TripleTownSim:
             self.next_item = self.random_item
         self.last_state = self.slot_item_bind(self.state_matrix, self.next_item)
         return self.last_state
+
+    def is_end(self, state):
+        valid_mask = self.valid_action_mask(state)
+        
+        if sum(valid_mask) == 1:
+            # print("No valid action")
+            return True
+
+        return False
 
     def valid_action_mask(self, state_all, block = False):
         mask = np.zeros(36)
@@ -374,12 +383,14 @@ class TripleTownSim:
             matrix[row, col] = items["rock"]
         else:
             marge_item = marge_list[0]
-            while downgrade[marge_item] in marge_list:
-                marge_item = downgrade[marge_item]
-                if marge_item == "grass" or marge_item == "tomstone" or marge_item == "rock":
-                    break
+            if marge_item != "grass" and marge_item != "tombstone" and marge_item != "rock":
+                print(marge_item)
+                while downgrade[marge_item] in marge_list:
+                    marge_item = downgrade[marge_item]
+                    if marge_item == "grass" or marge_item == "tombstone" or marge_item == "rock":
+                        break
             matrix[row, col] = items[marge_item]
-            print(f"crystal marge to {marge_item}")
+            # print(f"crystal marge to {marge_item}")
             self.update_connected_elements(matrix, row, col)
 
         return matrix
@@ -476,7 +487,7 @@ class TripleTownSim:
             if col == 5:
                 print()
 
-test = True
+test = False
 
 if test:
     sim_game = TripleTownSim(

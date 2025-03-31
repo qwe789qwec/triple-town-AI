@@ -82,19 +82,25 @@ env = TripleTownSim()
 hand_item = 8
 stock_item = 9
 slot_item = 21 * 35
-agent = DQNAgent(state_dim=hand_item + stock_item + slot_item, action_dim=6*6)
+agent = DQNAgent(state_dim=37, action_dim=6*6)
 
 for episode in range(1000):
     state = env.reset()
     total_reward = 0
 
-    for t in range(100):  # 限制最大回合數，防止無限循環
+    for t in range(3000):  # 限制最大回合數，防止無限循環
         action = agent.select_action(state)
-        next_state, reward, done = env.next_state_simulate(action)
-        
+        next_state = env.next_state_simulate(state, action)
+
+        if np.array_equal(next_state, state):
+            reward = -1
+        else:
+            reward = env.game_score
+
+        done = env.is_end(next_state)
+
         agent.store_transition(state, action, reward, next_state, done)
         agent.train()
-        total_reward += reward
 
         state = next_state
         if done:
@@ -103,6 +109,8 @@ for episode in range(1000):
     if episode % TARGET_UPDATE == 0:
         agent.update_target_network()
 
-    print(f"Episode {episode}, Total Reward: {total_reward}")
+    print(f"Episode {episode}, Total Reward: {env.game_score}")
 
+# save the model
+torch.save(agent.policy_net.state_dict(), "model.pth")
 print("訓練完成！")
