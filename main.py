@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from collections import deque
+import os
 
 # 超參數
 GAMMA = 0.99  # 折扣因子
@@ -75,14 +76,23 @@ class DQNAgent:
 
     def update_target_network(self):
         self.target_net.load_state_dict(self.policy_net.state_dict())
+    
+    def load_model(self):
+        if not os.path.exists("model.pth"):
+            return
+        self.policy_net.load_state_dict(torch.load("model.pth"))
+        self.target_net.load_state_dict(torch.load("model.pth"))
 
 # 訓練 DQN
 env = TripleTownSim()
+
+# load model
 
 hand_item = 8
 stock_item = 9
 slot_item = 21 * 35
 agent = DQNAgent(state_dim=37, action_dim=6*6)
+agent.load_model()
 
 for episode in range(1000):
     state = env.reset()
