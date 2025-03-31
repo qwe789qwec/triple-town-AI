@@ -252,6 +252,7 @@ class TripleTownSim:
             self.last_state = self.slot_item_bind(state, item)
             return self.last_state
         
+        self.game_score += 1
         row, col = divmod(action, 6)
 
         if state[row, col] == items["treasure"] or state[row, col] == items["Ltreasure"]:
@@ -349,7 +350,6 @@ class TripleTownSim:
         while len(connected_list) >= 3:
             if item == items["Fcastle"] and len(connected_list) < 4:
                 return matrix
-            self.gamescore += 1
             for r, c in connected_list:
                 matrix[r, c] = 0
                 self.time_matrix[r, c] = 0
@@ -476,7 +476,7 @@ class TripleTownSim:
             if col == 5:
                 print()
 
-test = False
+test = True
 
 if test:
     sim_game = TripleTownSim(
