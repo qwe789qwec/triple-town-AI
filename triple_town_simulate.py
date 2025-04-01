@@ -5,7 +5,7 @@ import random
 
 class TripleTownSim:
     """Triple Town遊戲模擬器"""
-    
+
     # 物品定義
     ITEMS = {
         "empty": 0,
@@ -107,6 +107,7 @@ class TripleTownSim:
     
     def __init__(self, state=None):
         """初始化遊戲狀態"""
+        self.board_size = 6
         self.reset(state)
 
     def reset(self, state=None):
@@ -114,6 +115,7 @@ class TripleTownSim:
         self.random_item = None
         self.memory_state = None
         self.memory_time = None
+        self.last_action = None
         self.last_game_score = 0
         
         if state is None:
@@ -280,14 +282,18 @@ class TripleTownSim:
     
     def next_state(self, current_state, action):
         """計算給定動作後的下一個狀態"""
-        valid_mask = self.get_valid_actions(current_state)
+        if self.last_action == 0:
+            block = True
+        else:
+            block = False
+        valid_mask = self.get_valid_actions(current_state, block)
         # board, item = self._split_state(current_state)
-        
         # 檢查是否有有效動作
         if sum(valid_mask) == 1:  # 只有swap動作可用
             print("No valid action")
             return None
-        
+
+        self.last_action = action
         # 處理交換物品的特殊動作
         if action == 0:
             return self._swap_action(current_state)
@@ -312,6 +318,7 @@ class TripleTownSim:
 
         # 檢查動作是否有效
         if valid_mask[action] == 0:
+            print("Invalid action")
             return current_state
         
         # 嘗試匹配熊的移動
