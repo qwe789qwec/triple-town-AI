@@ -1,288 +1,46 @@
-from triple_town_simulate import TripleTownSim
-import numpy as np
-import random
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-from collections import deque, namedtuple
-import matplotlib.pyplot as plt
-from tqdm import tqdm
 import os
+import argparse
+import time
+import torch
+import torch.multiprocessing as mp
+from triple_town_simulate import TripleTownSim
+from agent import TripleTownAgent
+from train import train_agent, evaluate_agent, calculate_reward
+from dqn_model import TripleTownDQN, Experience
 
-# 定義經驗元組
-Experience = namedtuple('Experience', ('state', 'action', 'reward', 'next_state', 'done'))
-
-class ReplayBuffer:
-    """經驗回放緩衝區"""
-    def __init__(self, capacity=100000):
-        self.buffer = deque(maxlen=capacity)
+def worker_process(
+    worker_id, 
+    shared_model, 
+    experience_queue, 
+    episode_scores,
+    args, 
+    device_id=None
+):
+    """工作進程負責運行遊戲並收集經驗"""
+    # 設定裝置，如果指定了GPU ID就使用，否則使用CPU
+    device = f"cuda:{device_id}" if device_id is not None and torch.cuda.is_available() else "cpu"
     
-    def push(self, state, action, reward, next_state, done):
-        """添加經驗到緩衝區"""
-        self.buffer.append(Experience(state, action, reward, next_state, done))
-    
-    def sample(self, batch_size):
-        """隨機抽樣經驗"""
-        return random.sample(self.buffer, batch_size)
-    
-    def __len__(self):
-        return len(self.buffer)
-
-class TripleTownDQN(nn.Module):
-    """深度Q網絡模型"""
-    def __init__(self):
-        super(TripleTownDQN, self).__init__()
-        # 基本參數
-        self.board_size = 6
-        self.num_item_types = 22  # 0-21的物品ID
-        self.embedding_dim = 32  # 物品嵌入維度
-        
-        # 物品嵌入層 - 將物品ID轉換為向量表示
-        self.item_embedding = nn.Embedding(self.num_item_types, self.embedding_dim)
-        
-        # 遊戲板處理 - 使用卷積神經網絡提取特徵
-        self.conv_layers = nn.Sequential(
-            nn.Conv2d(self.embedding_dim, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
-        )
-        
-        # 當前物品處理 - 使用全連接層
-        self.item_fc = nn.Sequential(
-            nn.Linear(self.embedding_dim, 64),
-            nn.ReLU(),
-        )
-        
-        # 合併後的全連接層
-        self.combined_fc = nn.Sequential(
-            nn.Linear(64 * self.board_size * self.board_size + 64, 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, 36)  # 36個輸出 - 對應36個可能的動作
-        )
-    
-    def forward(self, state):
-        """前向傳播"""
-        batch_size = state.size(0)
-        
-        # 分離當前物品和遊戲板
-        current_item = state[:, 0].long()
-        board = state[:, 1:].reshape(batch_size, self.board_size, self.board_size).long()
-        
-        # 處理當前物品
-        item_embedded = self.item_embedding(current_item)
-        item_features = self.item_fc(item_embedded)
-        
-        # 處理遊戲板
-        board_embedded = self.item_embedding(board)  # [batch, 6, 6, embed_dim]
-        board_embedded = board_embedded.permute(0, 3, 1, 2)  # [batch, embed_dim, 6, 6]
-        board_features = self.conv_layers(board_embedded)
-        # board_features = board_features.view(batch_size, -1)  # 展平
-        board_features = board_features.reshape(batch_size, -1)  # 展平
-        
-        # 合併特徵
-        combined_features = torch.cat([board_features, item_features], dim=1)
-        
-        # 計算Q值
-        q_values = self.combined_fc(combined_features)
-        
-        return q_values
-
-class TripleTownAgent:
-    """Triple Town智能體"""
-    def __init__(self, game, device='cuda' if torch.cuda.is_available() else 'cpu'):
-        self.game = game
-        self.device = device
-        
-        # 初始化模型
-        self.policy_net = TripleTownDQN().to(device)
-        self.target_net = TripleTownDQN().to(device)
-        self.target_net.load_state_dict(self.policy_net.state_dict())
-        self.target_net.eval()
-        
-        # 設置優化器
-        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.0001)
-        
-        # 經驗回放
-        self.memory = ReplayBuffer(capacity=100000)
-        
-        # 學習參數
-        self.batch_size = 64
-        self.gamma = 0.99  # 折扣因子
-        self.epsilon = 1.0  # 初始探索率
-        self.epsilon_min = 0.05  # 最小探索率
-        self.epsilon_decay = 0.999  # 探索率衰減
-        self.target_update = 10  # 目標網絡更新頻率
-        self.learn_counter = 0
-    
-    def state_to_tensor(self, state):
-        """將狀態轉換為張量"""
-        return torch.tensor(state, dtype=torch.float).to(self.device).unsqueeze(0)
-    
-    def select_action(self, state, explore=True):
-        """選擇動作 - epsilon-greedy策略"""
-        valid_mask = self.game.get_valid_actions(state)
-        valid_actions = np.where(valid_mask == 1)[0]
-        
-        # 探索: 隨機選擇有效動作
-        if explore and random.random() < self.epsilon:
-            return random.choice(valid_actions)
-        
-        # 利用: 選擇最佳Q值的有效動作
-        with torch.no_grad():
-            state_tensor = self.state_to_tensor(state)
-            q_values = self.policy_net(state_tensor).cpu().numpy()[0]
-            
-            # 遮罩無效動作
-            masked_q_values = np.full(36, -np.inf)
-            masked_q_values[valid_actions] = q_values[valid_actions]
-            
-            return np.argmax(masked_q_values)
-    
-    def optimize_model(self):
-        """從回放緩衝區學習"""
-        if len(self.memory) < self.batch_size:
-            return
-        
-        # 抽樣批次經驗
-        batch = self.memory.sample(self.batch_size)
-        batch = Experience(*zip(*batch))
-        
-        # 轉換為張量
-        state_batch = torch.tensor(np.array(batch.state), dtype=torch.float).to(self.device)
-        action_batch = torch.tensor(batch.action, dtype=torch.long).unsqueeze(1).to(self.device)
-        reward_batch = torch.tensor(batch.reward, dtype=torch.float).to(self.device)
-        
-        # 處理next_state (可能包含None) - 優化版本
-        non_final_mask = torch.tensor([s is not None for s in batch.next_state], 
-                                    dtype=torch.bool).to(self.device)
-        
-        valid_states = [s for s in batch.next_state if s is not None]
-        if valid_states:
-            valid_states_array = np.array(valid_states)
-            non_final_next_states = torch.tensor(valid_states_array, dtype=torch.float).to(self.device)
-        else:
-            non_final_next_states = torch.zeros((0, state_batch.shape[1]), dtype=torch.float).to(self.device)
-        
-        # 計算當前Q值
-        current_q_values = self.policy_net(state_batch).gather(1, action_batch)
-        
-        # 計算目標Q值
-        next_state_values = torch.zeros(self.batch_size, device=self.device)
-        with torch.no_grad():
-            if len(non_final_next_states) > 0:  # 確保有非終止狀態
-                next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0]
-        target_q_values = reward_batch + (self.gamma * next_state_values)
-        
-        # 計算Huber損失
-        loss = F.smooth_l1_loss(current_q_values, target_q_values.unsqueeze(1))
-        
-        # 優化模型
-        self.optimizer.zero_grad()
-        loss.backward()
-        # 梯度裁剪 - 防止梯度爆炸
-        for param in self.policy_net.parameters():
-            param.grad.data.clamp_(-1, 1)
-        self.optimizer.step()
-        
-        # 更新目標網絡
-        self.learn_counter += 1
-        if self.learn_counter % self.target_update == 0:
-            self.target_net.load_state_dict(self.policy_net.state_dict())
-        
-        # 更新探索率
-        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-    
-    def save(self, filename):
-        """保存模型"""
-        torch.save({
-            'policy_net': self.policy_net.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-            'epsilon': self.epsilon
-        }, filename)
-    
-    def load(self, filename):
-        """載入模型"""
-        checkpoint = torch.load(filename)
-        self.policy_net.load_state_dict(checkpoint['policy_net'])
-        self.target_net.load_state_dict(checkpoint['policy_net'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
-        self.epsilon = checkpoint['epsilon']
-
-def calculate_reward(game, prev_state, next_state, done):
-    """設計獎勵函數"""
-    if done:
-        return -10  # 遊戲結束的懲罰
-    
-    if next_state is None:
-        return -5  # 錯誤的動作
-    
-    # 基礎獎勵 - 分數增加
-    base_reward = 1
-    
-    # 分析狀態變化
-    prev_board, _ = game._split_state(prev_state)
-    next_board, _ = game._split_state(next_state)
-    
-    # 計算各類物品數量變化
-    reward = 0
-    
-    # 獎勵生成高級物品
-    for item_id, item_name in game.ITEM_NAMES.items():
-        prev_count = np.sum(prev_board == item_id)
-        next_count = np.sum(next_board == item_id)
-        
-        # 高級物品獎勵（根據等級給予不同獎勵）
-        if item_id >= game.ITEMS["hut"]:  # 從小屋開始算高級物品
-            if next_count > prev_count:
-                # 物品等級越高，獎勵越大
-                reward += (next_count - prev_count) * (item_id * 1.5)
-    
-    # 獎勵空間管理 - 鼓勵保持足夠的空位
-    empty_prev = np.sum(prev_board == 0)
-    empty_next = np.sum(next_board == 0)
-    if empty_next > empty_prev:
-        reward += 2  # 清理出更多空間
-    elif empty_next >= 15:  # 保持充足空間
-        reward += 1
-    
-    # 熊管理獎勵
-    bear_prev = np.sum(prev_board == game.ITEMS["bear"]) + np.sum(prev_board == game.ITEMS["Nbear"])
-    bear_next = np.sum(next_board == game.ITEMS["bear"]) + np.sum(next_board == game.ITEMS["Nbear"])
-    tombstone_prev = np.sum(prev_board == game.ITEMS["tombstone"])
-    tombstone_next = np.sum(next_board == game.ITEMS["tombstone"])
-    
-    if bear_prev > bear_next and tombstone_next > tombstone_prev:
-        reward += 3  # 成功將熊轉化為墓碑
-    
-    # 返回總獎勵
-    return base_reward + reward
-
-def train_agent(num_episodes=5000):
-    """訓練智能體"""
+    # 創建本地遊戲環境
     game = TripleTownSim()
-    agent = TripleTownAgent(game)
-
-    # if have model
-    if os.path.exists("triple_town_model_final.pt"):
-        agent.load("triple_town_model_final.pt")
-        print("load model")
     
-    # 記錄訓練過程
-    scores = []
-    avg_scores = []
+    # 創建本地智能體，但使用共享模型的參數
+    local_agent = TripleTownAgent(game, device=device)
     
-    for episode in tqdm(range(num_episodes)):
-        state = game.reset()
-        total_reward = 0
-        done = False
+    # 主循環：收集經驗
+    episodes_completed = 0
+    while episodes_completed < args.worker_episodes:
+        # 同步本地模型與共享模型
+        local_agent.policy_net.load_state_dict(shared_model.state_dict())
         
+        # 重置遊戲環境
+        state = game.reset()
+        done = False
+        episode_reward = 0
+        
+        # 執行一個完整的遊戲場景
         while not done:
-            # 選擇並執行動作
-            action = agent.select_action(state)
+            # 選擇動作
+            action = local_agent.select_action(state)
             next_state = game.next_state(state, action)
             
             # 檢查遊戲是否結束
@@ -291,80 +49,181 @@ def train_agent(num_episodes=5000):
             
             # 計算獎勵
             reward = calculate_reward(game, state, next_state, done)
-            total_reward += reward
+            episode_reward += reward
             
-            # 存儲經驗
-            agent.memory.push(state, action, reward, next_state if not done else None, done)
-            
-            # 從經驗中學習
-            agent.optimize_model()
+            # 將經驗加入隊列，讓主進程進行學習
+            experience_queue.put(
+                (state, action, reward, next_state if not done else None, done)
+            )
             
             # 更新狀態
             if not done and next_state is not None:
                 state = next_state
         
         # 記錄分數
-        scores.append(game.game_score)
-        avg_scores.append(np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores))
+        episode_scores.put((worker_id, game.game_score))
+        episodes_completed += 1
         
-        # 定期打印進度
-        if episode % 100 == 0:
-            print(f"Episode {episode}, Score: {game.game_score}, Avg Score: {avg_scores[-1]:.2f}, Epsilon: {agent.epsilon:.4f}")
+        # 定期報告進度
+        if episodes_completed % 10 == 0:
+            print(f"Worker {worker_id}: Completed {episodes_completed} episodes")
+
+def learner_process(
+    shared_model, 
+    experience_queue, 
+    episode_scores,
+    args,
+    device="cuda" if torch.cuda.is_available() else "cpu"
+):
+    """學習進程負責從經驗中學習並更新共享模型"""
+    # 創建遊戲環境用於評估（不實際使用來玩遊戲）
+    game = TripleTownSim()
+    
+    # 創建智能體
+    agent = TripleTownAgent(game, device=device)
+    agent.policy_net.load_state_dict(shared_model.state_dict())
+    
+    # 如果已經有現有模型，先載入
+    if args.load_model and os.path.exists(args.load_model):
+        agent.load(args.load_model)
+        shared_model.load_state_dict(agent.policy_net.state_dict())
+        print(f"Loaded model from {args.load_model}")
+    elif not args.load_model and os.path.exists(f"{args.model_dir}/triple_town_model_final.pt"):
+        agent.load(f"{args.model_dir}/triple_town_model_final.pt")
+        shared_model.load_state_dict(agent.policy_net.state_dict())
+        print(f"Loaded latest model from {args.model_dir}/triple_town_model_final.pt")
+    
+    # 訓練統計
+    episodes_completed = 0
+    all_scores = []
+    optimization_steps = 0
+    last_save_time = time.time()
+    
+    # 創建儲存目錄
+    os.makedirs(args.model_dir, exist_ok=True)
+    
+    # 主循環：從經驗隊列學習
+    while True:
+        # 檢查是否已經達到訓練目標
+        if episodes_completed >= args.episodes:
+            print(f"Completed {args.episodes} episodes. Training finished.")
+            break
         
-        # 定期保存模型
-        if episode % 500 == 0:
-            agent.save(f"triple_town_model_ep{episode}.pt")
+        # 收集經驗
+        try:
+            experience = experience_queue.get(timeout=1.0)
+            agent.memory.push(*experience)
+        except:
+            # 隊列為空，繼續檢查其他事項
+            pass
+        
+        # 嘗試讀取完成的遊戲分數
+        try:
+            while True:
+                worker_id, score = episode_scores.get_nowait()
+                all_scores.append(score)
+                episodes_completed += 1
+                
+                # 每100個episode打印統計信息
+                if len(all_scores) % 100 == 0:
+                    avg_score = sum(all_scores[-100:]) / 100
+                    print(f"Episodes: {episodes_completed}, Avg Score (last 100): {avg_score:.2f}")
+        except:
+            # 分數隊列為空，繼續前進
+            pass
+        
+        # 如果有足夠經驗，進行模型優化
+        if len(agent.memory) >= agent.batch_size:
+            agent.optimize_model()
+            optimization_steps += 1
+            
+            # 每100步更新共享模型
+            if optimization_steps % 100 == 0:
+                shared_model.load_state_dict(agent.policy_net.state_dict())
+        
+        # 每隔一段時間保存模型
+        current_time = time.time()
+        if current_time - last_save_time > 300:  # 每5分鐘
+            agent.save(f"{args.model_dir}/triple_town_model_step{optimization_steps}.pt")
+            last_save_time = current_time
     
     # 保存最終模型
-    agent.save("triple_town_model_final.pt")
+    agent.save(f"{args.model_dir}/triple_town_model_final.pt")
     
-    # 繪製學習曲線
-    plt.figure(figsize=(10, 6))
-    plt.plot(scores, alpha=0.3)
-    plt.plot(avg_scores, linewidth=2)
-    plt.title('Triple Town Training Progress')
-    plt.xlabel('Episode')
-    plt.ylabel('Score')
-    plt.savefig('triple_town_learning.png')
-    plt.close()
+    # 如果需要評估
+    if args.eval:
+        print(f"\n=== Evaluating agent over {args.eval_games} games ===")
+        evaluate_agent(agent, game, num_games=args.eval_games)
     
-    return agent, scores
+    return all_scores
 
-def evaluate_agent(agent, num_games=50):
-    """評估智能體表現"""
-    game = TripleTownSim()
-    scores = []
+def main():
+    # 解析命令行參數
+    parser = argparse.ArgumentParser(description="Triple Town DQN Training with Parallel Environments")
+    parser.add_argument("--train", action="store_true", help="Train the agent")
+    parser.add_argument("--eval", action="store_true", help="Evaluate the agent")
+    parser.add_argument("--episodes", type=int, default=50000, help="Total number of training episodes")
+    parser.add_argument("--worker-episodes", type=int, default=1000, help="Episodes per worker")
+    parser.add_argument("--eval-games", type=int, default=50, help="Number of evaluation games")
+    parser.add_argument("--model-dir", type=str, default="models", help="Directory for saving/loading models")
+    parser.add_argument("--load-model", type=str, default=None, help="Path to load a specific model")
+    parser.add_argument("--num-workers", type=int, default=30, help="Number of parallel workers")
+    parser.add_argument("--use-gpu", action="store_true", help="Use GPU for training if available")
     
-    for i in range(num_games):
-        state = game.reset()
-        done = False
+    args = parser.parse_args()
+    
+    # 如果既不訓練也不評估，預設都執行
+    if not args.train and not args.eval:
+        args.train = True
+        args.eval = True
+    
+    if args.train:
+        # 設置多進程支持
+        mp.set_start_method('spawn', force=True)
         
-        while not done:
-            # 使用學習到的策略選擇動作
-            action = agent.select_action(state, explore=False)
-            next_state = game.next_state(state, action)
-            
-            if next_state is None or game.is_game_over(next_state):
-                done = True
-            else:
-                state = next_state
+        # 創建共享模型（用於所有工作進程）
+        device = "cuda" if args.use_gpu and torch.cuda.is_available() else "cpu"
+        shared_model = TripleTownDQN().to(device)
+        shared_model.share_memory()  # 使模型參數在進程間共享
         
-        scores.append(game.game_score)
-        print(f"Game {i+1}: Score = {game.game_score}")
+        # 創建進程間通信隊列
+        experience_queue = mp.Queue(maxsize=10000)  # 經驗隊列
+        episode_scores = mp.Queue()  # 分數隊列
+        
+        # 啟動多個工作進程
+        workers = []
+        for i in range(args.num_workers):
+            # 如果有多個GPU，可以為每個工作進程指定不同的GPU
+            gpu_id = i % torch.cuda.device_count() if args.use_gpu and torch.cuda.is_available() else None
+            p = mp.Process(
+                target=worker_process,
+                args=(i, shared_model, experience_queue, episode_scores, args, gpu_id)
+            )
+            p.start()
+            workers.append(p)
+        
+        # 啟動學習進程（在主進程中運行）
+        scores = learner_process(shared_model, experience_queue, episode_scores, args)
+        
+        # 等待所有工作進程完成
+        for p in workers:
+            p.join()
+        
+        print("All processes completed.")
     
-    avg_score = np.mean(scores)
-    max_score = np.max(scores)
-    
-    print(f"\nEvaluation Results:")
-    print(f"Average Score: {avg_score:.2f}")
-    print(f"Maximum Score: {max_score}")
-    
-    return scores
+    # 如果只想評估而不訓練
+    elif args.eval:
+        game = TripleTownSim()
+        agent = TripleTownAgent(game)
+        
+        # 載入模型進行評估
+        model_path = args.load_model if args.load_model else f"{args.model_dir}/triple_town_model_final.pt"
+        if os.path.exists(model_path):
+            agent.load(model_path)
+            print(f"Loaded model from {model_path}")
+            evaluate_agent(agent, game, num_games=args.eval_games)
+        else:
+            print(f"No model found at {model_path}. Please train first or specify a valid model path.")
 
-# 主函數
 if __name__ == "__main__":
-    # 訓練智能體
-    trained_agent, training_scores = train_agent(num_episodes=5000)
-    
-    # 評估智能體表現
-    evaluation_scores = evaluate_agent(trained_agent, num_games=50)
+    main()

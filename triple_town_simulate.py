@@ -290,7 +290,7 @@ class TripleTownSim:
         # board, item = self._split_state(current_state)
         # 檢查是否有有效動作
         if sum(valid_mask) == 1:  # 只有swap動作可用
-            print("No valid action")
+            # print("No valid action")
             return None
 
         self.last_action = action
