@@ -1,4 +1,4 @@
-from triple_town_simulate_AI import TripleTownSim
+from triple_town_simulate import TripleTownSim
 import numpy as np
 import random
 import torch
