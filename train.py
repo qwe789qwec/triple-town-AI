@@ -35,6 +35,24 @@ def calculate_reward(game, prev_state, next_state, done):
     empty_next = np.sum(next_board == 0)
     # if empty_next > empty_prev:
     #     reward += 1
+
+    # item connection 獎勵
+    for row in range(rows):
+        for col in range(cols):
+            item = next_board[row, col]
+            if item != 0:
+                # 檢查上方
+                if row > 0 and next_board[row - 1, col] == item:
+                    reward += 1
+                # 檢查下方
+                if row < rows - 1 and next_board[row + 1, col] == item:
+                    reward += 1
+                # 檢查左方
+                if col > 0 and next_board[row, col - 1] == item:
+                    reward += 1
+                # 檢查右方
+                if col < cols - 1 and next_board[row, col + 1] == item:
+                    reward += 1
     
     prev_board[0, 0] = 0
     next_board[0, 0] = 0
