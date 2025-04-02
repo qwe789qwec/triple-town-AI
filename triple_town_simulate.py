@@ -620,14 +620,16 @@ class TripleTownSim:
 # 测试游戏
 def test_game():
     """运行游戏测试"""
-    game = TripleTownSim(
-        state = np.array([ 1,
-            1 ,0 ,8 ,0 ,0 ,0 ,
-            0 ,0 ,0 ,4 ,4 ,1 ,
-            0 ,0 ,4 ,0 ,0 ,2 ,
-            4 ,0 ,4 ,1 ,1 ,15,
-            0 ,1 ,3 ,0 ,10,11,
-            11,2 ,0 ,13,13,14]))
+
+    save_state = np.array([ 1,
+        1 ,0 ,8 ,0 ,0 ,0 ,
+        0 ,0 ,0 ,4 ,4 ,1 ,
+        0 ,0 ,4 ,0 ,0 ,2 ,
+        4 ,0 ,4 ,1 ,1 ,15,
+        0 ,1 ,3 ,0 ,10,11,
+        11,2 ,0 ,13,13,14])
+
+    game = TripleTownSim()
     
     state = game.now_state
     

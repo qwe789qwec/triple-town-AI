@@ -33,8 +33,8 @@ def calculate_reward(game, prev_state, next_state, done):
     # 空間管理獎勵
     empty_prev = np.sum(prev_board == 0)
     empty_next = np.sum(next_board == 0)
-    if empty_next > empty_prev:
-        reward += 1
+    # if empty_next > empty_prev:
+    #     reward += 1
     
     prev_board[0, 0] = 0
     next_board[0, 0] = 0
@@ -54,7 +54,6 @@ def train_agent(agent, game, num_episodes=5000, model_dir="models"):
     
     for episode in tqdm(range(num_episodes)):
         state = game.reset()
-        total_reward = 0
         action = None
         done = False
         
@@ -73,7 +72,6 @@ def train_agent(agent, game, num_episodes=5000, model_dir="models"):
             
             # 計算獎勵
             reward = calculate_reward(game, state, next_state, done)
-            total_reward += reward
             
             # 存儲經驗
             agent.memory.push(state, action, reward, next_state if not done else None, done)
@@ -87,11 +85,12 @@ def train_agent(agent, game, num_episodes=5000, model_dir="models"):
         
         # 記錄分數
         scores.append(game.game_score)
-        avg_scores.append(np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores))
+        avg_scores.append(np.mean(scores[-300:]) if len(scores) >= 300 else np.mean(scores))
         
         # 定期打印進度
-        if episode % 100 == 0:
-            print(f"Episode {episode}, Score: {game.game_score}, Avg Score: {avg_scores[-1]:.2f}, Epsilon: {agent.epsilon:.4f}")
+        if episode % 300 == 0:
+            best_score = np.max(scores)
+            print(f"Episode {episode}, Best Score: {best_score}, Avg Score: {avg_scores[-1]:.2f}, Epsilon: {agent.epsilon:.4f}")
         
         # 定期保存模型
         if episode % 5000 == 0:

@@ -5,7 +5,7 @@ from agent import TripleTownAgent
 from train import train_agent, evaluate_agent
 
 TRAIN = True
-EVAL = False
+EVAL = True
 
 def main():
     # 解析命令行參數
@@ -32,6 +32,8 @@ def main():
             evaluate_agent(agent, game, num_games=20)
         else:
             print(f"找不到模型: {model_path}。請先訓練或指定有效的模型路徑。")
+
+        
 
 if __name__ == "__main__":
     main()

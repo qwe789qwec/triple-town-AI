@@ -30,7 +30,7 @@ class TripleTownAgent:
         self.gamma = 0.99  # 折扣因子
         self.epsilon = 1.0  # 初始探索率
         self.epsilon_min = 0.1  # 最小探索率
-        self.epsilon_decay = 0.9995  # 探索率衰減
+        self.epsilon_decay = 0.999995  # 探索率衰減
         self.target_update = 50  # 目標網絡更新頻率
         self.learn_counter = 0
     
@@ -108,9 +108,9 @@ class TripleTownAgent:
         self.learn_counter += 1
         if self.learn_counter % self.target_update == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
+            # 更新探索率
+            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
         
-        # 更新探索率
-        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
     
     def save(self, filename):
         """保存模型"""
