@@ -118,6 +118,7 @@ def evaluate_agent(agent, game, num_games=50):
     for i in range(num_games):
         state = game.reset()
         done = False
+        action = None
         
         while not done:
             # 使用學習到的策略選擇動作
