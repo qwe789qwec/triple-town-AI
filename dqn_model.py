@@ -25,51 +25,42 @@ class ReplayBuffer:
 
 
 class TripleTownDQN(nn.Module):
+    """深度Q網絡模型"""
     def __init__(self):
         super(TripleTownDQN, self).__init__()
         # 基本參數
         self.board_size = 6
-        self.num_item_types = 22
-        self.embedding_dim = 64  # 增加嵌入維度
+        self.num_item_types = 22  # 0-21的物品ID
+        self.embedding_dim = 32  # 物品嵌入維度
         
-        # 物品嵌入層
+        # 物品嵌入層 - 將物品ID轉換為向量表示
         self.item_embedding = nn.Embedding(self.num_item_types, self.embedding_dim)
         
-        # 卷積網絡 - 更深層次且有批標準化
+        # 遊戲板處理 - 使用卷積神經網絡提取特徵
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(self.embedding_dim, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(self.embedding_dim, 64, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.ReLU(),
         )
         
-        # 當前物品處理
+        # 當前物品處理 - 使用全連接層
         self.item_fc = nn.Sequential(
-            nn.Linear(self.embedding_dim, 128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(self.embedding_dim, 64),
             nn.ReLU(),
         )
         
-        # 價值和優勢分離 (Dueling DQN架構)
-        self.advantage_stream = nn.Sequential(
-            nn.Linear(128 * self.board_size * self.board_size + 128, 512),
+        # 合併後的全連接層
+        self.combined_fc = nn.Sequential(
+            nn.Linear(64 * self.board_size * self.board_size + 64, 512),
             nn.ReLU(),
-            nn.Linear(512, 36)
-        )
-        
-        self.value_stream = nn.Sequential(
-            nn.Linear(128 * self.board_size * self.board_size + 128, 512),
+            nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Linear(512, 1)
+            nn.Linear(256, 36)  # 36個輸出 - 對應36個可能的動作
         )
     
     def forward(self, state):
+        """前向傳播"""
         batch_size = state.size(0)
         
         # 分離當前物品和遊戲板
@@ -81,19 +72,16 @@ class TripleTownDQN(nn.Module):
         item_features = self.item_fc(item_embedded)
         
         # 處理遊戲板
-        board_embedded = self.item_embedding(board)
-        board_embedded = board_embedded.permute(0, 3, 1, 2)
+        board_embedded = self.item_embedding(board)  # [batch, 6, 6, embed_dim]
+        board_embedded = board_embedded.permute(0, 3, 1, 2)  # [batch, embed_dim, 6, 6]
         board_features = self.conv_layers(board_embedded)
-        board_features = board_features.reshape(batch_size, -1)
+        # board_features = board_features.view(batch_size, -1)  # 展平
+        board_features = board_features.reshape(batch_size, -1)  # 展平
         
         # 合併特徵
         combined_features = torch.cat([board_features, item_features], dim=1)
         
-        # Dueling架構
-        advantage = self.advantage_stream(combined_features)
-        value = self.value_stream(combined_features)
-        
-        # Q值 = 價值 + (優勢 - 平均優勢)
-        q_values = value + (advantage - advantage.mean(dim=1, keepdim=True))
+        # 計算Q值
+        q_values = self.combined_fc(combined_features)
         
         return q_values
