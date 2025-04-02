@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
 
+item_list = {}
+
 def calculate_reward(game, prev_state, next_state, done):
     """改進的獎勵函數"""
     if done:
@@ -17,41 +19,27 @@ def calculate_reward(game, prev_state, next_state, done):
     
     # 基礎獎勵
     reward = 0
+
+    rows, cols = next_board.shape  # 假設是numpy陣列
     
-    # 直接獎勵合併事件 - 每次成功合併給予明確獎勵
-    for item_id in range(3, game.ITEMS["castle"] + 1):  # 從草開始往上計算
-        prev_count = np.sum(prev_board == item_id)
-        next_count = np.sum(next_board == item_id)
-        if next_count > prev_count:
-            # 物品等級越高，獎勵指數增長
-            reward += (next_count - prev_count) * (2 ** (item_id - 2))
+    for row in range(rows):
+        for col in range(cols):
+            item = next_board[row, col]
+            # 如果之前沒見過這種物品，給予獎勵
+            if item not in item_list:
+                item_list[item] = 1
+                reward += 10
     
     # 空間管理獎勵
     empty_prev = np.sum(prev_board == 0)
     empty_next = np.sum(next_board == 0)
     if empty_next > empty_prev:
-        reward += 3  # 鼓勵清理空間
-    elif empty_next < 10:  # 空間過少時的懲罰
-        reward -= 2 * (10 - empty_next)  # 空間越少懲罰越大
-    
-    # 策略獎勵 - 獎勵創造潛在合併機會
-    potential_reward = 0
-    for i in range(game.board_size):
-        for j in range(game.board_size):
-            if next_board[i, j] > 0:  # 非空格
-                # 檢查相鄰位置是否有相同物品
-                for di, dj in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
-                    ni, nj = i + di, j + dj
-                    if 0 <= ni < game.board_size and 0 <= nj < game.board_size:
-                        if next_board[i, j] == next_board[ni, nj]:
-                            potential_reward += 2  # 發現一對相同物品
+        reward += 1
     
     prev_board[0, 0] = 0
     next_board[0, 0] = 0
     if np.array_equal(prev_board, next_board):
-        potential_reward -= 1
-    
-    reward += potential_reward
+        reward -= 1
     
     return reward
 
@@ -67,11 +55,16 @@ def train_agent(agent, game, num_episodes=5000, model_dir="models"):
     for episode in tqdm(range(num_episodes)):
         state = game.reset()
         total_reward = 0
+        action = None
         done = False
         
         while not done:
             # 選擇並執行動作
-            action = agent.select_action(state)
+            if action == 0:
+                block = True
+            else:
+                block = False
+            action = agent.select_action(state, block)
             next_state = game.next_state(state, action)
             
             # 檢查遊戲是否結束
@@ -101,7 +94,7 @@ def train_agent(agent, game, num_episodes=5000, model_dir="models"):
             print(f"Episode {episode}, Score: {game.game_score}, Avg Score: {avg_scores[-1]:.2f}, Epsilon: {agent.epsilon:.4f}")
         
         # 定期保存模型
-        if episode % 500 == 0:
+        if episode % 5000 == 0:
             agent.save(f"{model_dir}/triple_town_model_ep{episode}.pt")
     
     # 保存最終模型
@@ -129,7 +122,11 @@ def evaluate_agent(agent, game, num_games=50):
         
         while not done:
             # 使用學習到的策略選擇動作
-            action = agent.select_action(state, explore=False)
+            if action == 0:
+                block = True
+            else:
+                block = False
+            action = agent.select_action(state, block, explore=False)
             next_state = game.next_state(state, action)
             
             if next_state is None or game.is_game_over(next_state):

@@ -26,21 +26,21 @@ class TripleTownAgent:
         self.memory = ReplayBuffer(capacity=100000)
         
         # 學習參數
-        self.batch_size = 64
+        self.batch_size = 500
         self.gamma = 0.99  # 折扣因子
         self.epsilon = 1.0  # 初始探索率
         self.epsilon_min = 0.1  # 最小探索率
         self.epsilon_decay = 0.9995  # 探索率衰減
-        self.target_update = 5  # 目標網絡更新頻率
+        self.target_update = 50  # 目標網絡更新頻率
         self.learn_counter = 0
     
     def state_to_tensor(self, state):
         """將狀態轉換為張量"""
         return torch.tensor(state, dtype=torch.float).to(self.device).unsqueeze(0)
     
-    def select_action(self, state, explore=True):
+    def select_action(self, state, block = False, explore=True):
         """選擇動作 - epsilon-greedy策略"""
-        valid_mask = self.game.get_valid_actions(state)
+        valid_mask = self.game.get_valid_actions(state, block)
         valid_actions = np.where(valid_mask == 1)[0]
         
         # 探索: 隨機選擇有效動作

@@ -9,7 +9,7 @@ Experience = namedtuple('Experience', ('state', 'action', 'reward', 'next_state'
 
 class ReplayBuffer:
     """經驗回放緩衝區"""
-    def __init__(self, capacity=100000):
+    def __init__(self, capacity=500000):
         self.buffer = deque(maxlen=capacity)
     
     def push(self, state, action, reward, next_state, done):
