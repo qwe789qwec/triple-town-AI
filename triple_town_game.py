@@ -125,11 +125,11 @@ class TripleTownHandler:
     
     def game_status(self, take_screenshot=True):
         self._take_screenshot(region=self.game_region)
-        retry_count = 0
         max_retries = 3
         status = np.zeros(37, dtype=int)
 
         for slot_num in range(37):
+            retry_count = 0
             if slot_num == 0:
                 check_pos = position(500, 70)
             else:
@@ -142,6 +142,7 @@ class TripleTownHandler:
             while retry_count < max_retries:
                 slot_img = self.game_shot[check_pos.y:check_pos.y + self.slot_size, check_pos.x:check_pos.x + self.slot_size]
                 index = self._find_matching_item(slot_img)
+                # cv2.imwrite(f"test/slot_{slot_num}.png", slot_img)
                 if index >= 21:
                     retry_count += 1
                     status[slot_num] = 21
@@ -229,7 +230,7 @@ class TripleTownHandler:
 
         return max(existing_ids) + 1
 
-    def is_game_end(self):
+    def is_game_over(self):
         end_sign =self._get_item_position('buttons/continue.png')
         if end_sign.x == -1 and end_sign.y == -1:
             return False

@@ -10,6 +10,8 @@ def main():
     agent.load("models/triple_town_model_final.pt")
     game.reset()
     action = -1
+    if game.screen_center.x == -1:
+        exit()
     while True:
         state = game.game_status()
         gameSim.display_board(state)
@@ -19,6 +21,8 @@ def main():
             block = False
         action = agent.select_action(state, block)
         game.click_slot(action)
+        if gameSim.is_game_over(state):
+            break
 
 
 if __name__ == "__main__":
