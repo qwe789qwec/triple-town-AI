@@ -255,7 +255,6 @@ if test:
     gameSim = TripleTownSim()
     while True:
         game_status = game.game_status()
-        print(game_status)
         gameSim.display_board(game_status)
         action = int(input("请输入动作:"))
         game.save_image(game.game_shot, action)
