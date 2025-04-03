@@ -23,14 +23,14 @@ class TripleTownAgent:
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.0003)
         
         # 經驗回放
-        self.memory = ReplayBuffer(capacity=100000)
+        self.memory = ReplayBuffer(capacity=500000)
         
         # 學習參數
-        self.batch_size = 500
+        self.batch_size = 5000
         self.gamma = 0.99  # 折扣因子
         self.epsilon = 1.0  # 初始探索率
         self.epsilon_min = 0.1  # 最小探索率
-        self.epsilon_decay = 0.999995  # 探索率衰減
+        self.epsilon_decay = 0.9995  # 探索率衰減
         self.target_update = 50  # 目標網絡更新頻率
         self.learn_counter = 0
     
@@ -111,7 +111,6 @@ class TripleTownAgent:
             # 更新探索率
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
         
-    
     def save(self, filename):
         """保存模型"""
         torch.save({

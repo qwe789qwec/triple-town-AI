@@ -3,10 +3,12 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
 
+global item_list
 item_list = {}
 
 def calculate_reward(game, prev_state, next_state, done):
     """改進的獎勵函數"""
+    global item_list
     if done:
         return -20  # 增加遊戲結束的懲罰
     
@@ -28,31 +30,15 @@ def calculate_reward(game, prev_state, next_state, done):
             # 如果之前沒見過這種物品，給予獎勵
             if item not in item_list:
                 item_list[item] = 1
-                reward += 10
+                reward += 20
+                if(item >= 5 and item <= 9):
+                    game.display_board(next_state)
     
     # 空間管理獎勵
     empty_prev = np.sum(prev_board == 0)
     empty_next = np.sum(next_board == 0)
-    # if empty_next > empty_prev:
-    #     reward += 1
-
-    # item connection 獎勵
-    for row in range(rows):
-        for col in range(cols):
-            item = next_board[row, col]
-            if item != 0:
-                # 檢查上方
-                if row > 0 and next_board[row - 1, col] == item:
-                    reward += 1
-                # 檢查下方
-                if row < rows - 1 and next_board[row + 1, col] == item:
-                    reward += 1
-                # 檢查左方
-                if col > 0 and next_board[row, col - 1] == item:
-                    reward += 1
-                # 檢查右方
-                if col < cols - 1 and next_board[row, col + 1] == item:
-                    reward += 1
+    if empty_next > empty_prev:
+        reward += 5
     
     prev_board[0, 0] = 0
     next_board[0, 0] = 0
@@ -69,11 +55,14 @@ def train_agent(agent, game, num_episodes=5000, model_dir="models"):
     # 記錄訓練過程
     scores = []
     avg_scores = []
-    
+    total_reward = 0
+
     for episode in tqdm(range(num_episodes)):
         state = game.reset()
         action = None
         done = False
+        global item_list
+        item_list = {}
         
         while not done:
             # 選擇並執行動作
@@ -90,7 +79,8 @@ def train_agent(agent, game, num_episodes=5000, model_dir="models"):
             
             # 計算獎勵
             reward = calculate_reward(game, state, next_state, done)
-            
+            total_reward += reward
+
             # 存儲經驗
             agent.memory.push(state, action, reward, next_state if not done else None, done)
             
@@ -111,7 +101,7 @@ def train_agent(agent, game, num_episodes=5000, model_dir="models"):
             print(f"Episode {episode}, Best Score: {best_score}, Avg Score: {avg_scores[-1]:.2f}, Epsilon: {agent.epsilon:.4f}")
         
         # 定期保存模型
-        if episode % 5000 == 0:
+        if episode % 1000 == 0:
             agent.save(f"{model_dir}/triple_town_model_ep{episode}.pt")
     
     # 保存最終模型
@@ -129,7 +119,7 @@ def train_agent(agent, game, num_episodes=5000, model_dir="models"):
     
     return scores
 
-def evaluate_agent(agent, game, num_games=50):
+def evaluate_agent(agent, game, num_games=10):
     """評估智能體表現"""
     scores = []
     
@@ -147,8 +137,13 @@ def evaluate_agent(agent, game, num_games=50):
             action = agent.select_action(state, block, explore=False)
             next_state = game.next_state(state, action)
             
+            game.display_board(state)
+            print("action", action)
+            print("score", game.game_score)
+
             if next_state is None or game.is_game_over(next_state):
                 done = True
+                print("================================================")
             else:
                 state = next_state
         
