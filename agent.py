@@ -3,14 +3,16 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import random
-import os
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+from triple_town_simulate import TripleTownSim
 
 from dqn_model import TripleTownDQN, ReplayBuffer, Experience
 
 class TripleTownAgent:
     """Triple Town智能體"""
-    def __init__(self, game, device='cuda' if torch.cuda.is_available() else 'cpu'):
-        self.game = game
+    def __init__(self, device='cuda' if torch.cuda.is_available() else 'cpu'):
+        self.game = TripleTownSim()
         self.device = device
         
         # 初始化模型
@@ -26,17 +28,16 @@ class TripleTownAgent:
         self.memory = ReplayBuffer(capacity=500000)
         
         # 學習參數
-        self.batch_size = 5000
+        self.batch_size = 1000
         self.gamma = 0.99  # 折扣因子
         self.epsilon = 1.0  # 初始探索率
         self.epsilon_min = 0.1  # 最小探索率
         self.epsilon_decay = 0.9995  # 探索率衰減
         self.target_update = 50  # 目標網絡更新頻率
         self.learn_counter = 0
-    
-    def state_to_tensor(self, state):
-        """將狀態轉換為張量"""
-        return torch.tensor(state, dtype=torch.float).to(self.device).unsqueeze(0)
+
+        # game params
+        self.item_list = np.zeros(len(self.game.ITEMS))
     
     def select_action(self, state, block = False, explore=True):
         """選擇動作 - epsilon-greedy策略"""
@@ -49,7 +50,7 @@ class TripleTownAgent:
         
         # 利用: 選擇最佳Q值的有效動作
         with torch.no_grad():
-            state_tensor = self.state_to_tensor(state)
+            state_tensor = torch.tensor(state, dtype=torch.float).to(self.device).unsqueeze(0)
             q_values = self.policy_net(state_tensor).cpu().numpy()[0]
             
             # 遮罩無效動作
@@ -110,7 +111,147 @@ class TripleTownAgent:
             self.target_net.load_state_dict(self.policy_net.state_dict())
             # 更新探索率
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+    
+    def calculate_reward(self, prev_state, next_state, done):
+        """改進的獎勵函數"""
+        self.item_count = [0] * len(self.game.ITEMS)
+
+        if done:
+            return -20  # 增加遊戲結束的懲罰
         
+        if next_state is None:
+            return -10  # 增加無效動作的懲罰
+        
+        # 分析狀態變化
+        prev_board, _ = self.game._split_state(prev_state)
+        next_board, _ = self.game._split_state(next_state)
+        
+        # 基礎獎勵
+        reward = 0
+
+        rows, cols = next_board.shape  # 假設是numpy陣列
+
+        for row in range(rows):
+            for col in range(cols):
+                item = next_board[row, col]
+                if self.item_list[item] == 0:
+                    self.item_list[item] = 1
+                    if(item < 10):
+                        reward = item * 5
+                    else:
+                        reward = (item - 10) * 10
+                    if(item >= 5 and item <= 9):
+                        self.game.display_board(next_state)
+        
+        # 空間管理獎勵
+        empty_prev = np.sum(prev_board == 0)
+        empty_next = np.sum(next_board == 0)
+        if empty_next > empty_prev:
+            reward += 3
+        
+        return reward
+
+    def train(self, episodes, model_dir = "models"):
+        scores = []
+        avg_scores = []
+        total_reward = 0
+
+        for episode in tqdm(range(episodes)):
+            state = self.game.reset()
+            action = None
+            done = False
+            self.item_list = np.zeros(len(self.game.ITEMS))
+
+            while not done:
+                # 選擇並執行動作
+                if action == 0:
+                    block = True
+                else:
+                    block = False
+                action = self.select_action(state, block)
+                next_state = self.game.next_state(state, action)
+                
+                # 檢查遊戲是否結束
+                if next_state is None or self.game.is_game_over(next_state):
+                    done = True
+                
+                # 計算獎勵
+                reward = self.calculate_reward(state, next_state, done)
+                total_reward += reward
+
+                # 存儲經驗
+                self.memory.push(state, action, reward, next_state if not done else None, done)
+                
+                # 從經驗中學習
+                self.optimize_model()
+                
+                # 更新狀態
+                if not done and next_state is not None:
+                    state = next_state
+            
+            # 記錄分數
+            scores.append(self.game.game_score)
+            avg_scores.append(np.mean(scores[-300:]) if len(scores) >= 300 else np.mean(scores))
+            
+            # 定期打印進度
+            if episode % 300 == 0:
+                best_score = np.max(scores)
+                print(f"Episode {episode}, Best Score: {best_score}, Avg Score: {avg_scores[-1]:.2f}, Epsilon: {self.epsilon:.4f}")
+            
+            # 定期保存模型
+            if episode % 1000 == 0:
+                self.save(f"{model_dir}/triple_town_model_ep{episode}.pt")
+        
+        # 保存最終模型
+        self.save(f"{model_dir}/triple_town_model_final.pt")
+        
+        # 繪製學習曲線
+        plt.figure(figsize=(10, 6))
+        plt.plot(scores, alpha=0.3)
+        plt.plot(avg_scores, linewidth=2)
+        plt.title('Triple Town Training Progress')
+        plt.xlabel('Episode')
+        plt.ylabel('Score')
+        plt.savefig(f'{model_dir}/triple_town_learning.png')
+        plt.close()
+    
+    def validate(self):
+        scores = []
+    
+        for i in range(20):
+            state = self.game.reset()
+            done = False
+            action = None
+            
+            while not done:
+                # 使用學習到的策略選擇動作
+                if action == 0:
+                    block = True
+                else:
+                    block = False
+                action = self.select_action(state, block, explore=False)
+                next_state = self.game.next_state(state, action)
+                
+                self.game.display_board(state)
+                print("action", action)
+                print("score", self.game.game_score)
+
+                if next_state is None or self.game.is_game_over(next_state):
+                    done = True
+                    print("================================================")
+                else:
+                    state = next_state
+            
+            scores.append(self.game.game_score)
+            print(f"Game {i+1}: Score = {self.game.game_score}")
+        
+        avg_score = np.mean(scores)
+        max_score = np.max(scores)
+        
+        print(f"\nEvaluation Results:")
+        print(f"Average Score: {avg_score:.2f}")
+        print(f"Maximum Score: {max_score}")
+
     def save(self, filename):
         """保存模型"""
         torch.save({
