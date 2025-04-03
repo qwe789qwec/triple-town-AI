@@ -124,7 +124,7 @@ class TripleTownHandler:
     def slot_region(self, pos_x, pos_y):
         slot_x = 70 + self.slot_gap * pos_x - (self.slot_size / 2)
         slot_y = 160 + self.slot_gap * pos_y - (self.slot_size / 2)
-        return int(slot_x), int(slot_y)
+        return position(slot_x, slot_y)
     
     def get_game_area(self, take_screenshot=True):
         max_retries = 3
@@ -132,11 +132,11 @@ class TripleTownHandler:
 
         for slot in range(36):
             row, col = divmod(slot, 6)
-            slot_x, slot_y = self.slot_region(row, col)
+            slot = self.slot_region(row, col)
             retry_count = 0
             
             while retry_count < max_retries:
-                slot_img = self.latest_image[slot_y:slot_y + self.slot_size, slot_x:slot_x + self.slot_size]
+                slot_img = self.latest_image[slot.y:slot.y + self.slot_size, slot.x:slot.x + self.slot_size]
                 index = self.find_matching_item(slot_img)
                 if index >= 21:
                     retry_count += 1
