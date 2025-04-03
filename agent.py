@@ -32,23 +32,26 @@ class TripleTownAgent:
         self.gamma = 0.99  # 折扣因子
         self.epsilon = 1.0  # 初始探索率
         self.epsilon_min = 0.1  # 最小探索率
-        self.epsilon_decay = 0.9995  # 探索率衰減
+        self.epsilon_decay = 0.9997  # 探索率衰減
         self.target_update = 50  # 目標網絡更新頻率
         self.learn_counter = 0
 
         # game params
         self.item_list = np.zeros(len(self.game.ITEMS))
     
-    def select_action(self, state, block = False, explore=True):
-        """選擇動作 - epsilon-greedy策略"""
+    def select_action(self, state, block=False, explore=True):
+        """選擇動作 - epsilon-greedy策略 + softmax"""
         valid_mask = self.game.get_valid_actions(state, block)
         valid_actions = np.where(valid_mask == 1)[0]
         
-        # 探索: 隨機選擇有效動作
+        if len(valid_actions) == 0:
+            return None  # 沒有有效動作時返回 None，或其他適當的處理
+        
+        # 純探索: 完全隨機選擇有效動作
         if explore and random.random() < self.epsilon:
             return random.choice(valid_actions)
         
-        # 利用: 選擇最佳Q值的有效動作
+        # 計算 Q 值
         with torch.no_grad():
             state_tensor = torch.tensor(state, dtype=torch.float).to(self.device).unsqueeze(0)
             q_values = self.policy_net(state_tensor).cpu().numpy()[0]
@@ -57,7 +60,13 @@ class TripleTownAgent:
             masked_q_values = np.full(36, -np.inf)
             masked_q_values[valid_actions] = q_values[valid_actions]
             
-            return np.argmax(masked_q_values)
+            if explore:
+                # 基於 softmax 的探索 (偏向高 Q 值的動作)
+                q_values_probs = F.softmax(torch.tensor(masked_q_values), dim=0)
+                return np.random.choice(36, p=q_values_probs.numpy())
+            else:
+                # 純利用: 選擇最高 Q 值的有效動作
+                return np.argmax(masked_q_values)
     
     def optimize_model(self):
         """從回放緩衝區學習"""
