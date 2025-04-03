@@ -139,6 +139,8 @@ class TripleTownSim:
     def is_game_over(self, state):
         """檢查遊戲是否結束"""
         valid_mask = self.get_valid_actions(state)
+        if state[1] == self.ITEMS["empty"]:
+            return False
         return sum(valid_mask) == 1  # 只有swap動作可用
     
     def get_valid_actions(self, state, block_swap=False):
@@ -280,51 +282,47 @@ class TripleTownSim:
                     bear_changes_new.remove((r2, c2))
                     break
     
-    def next_state(self, current_state, action):
+    def next_state(self, state, action):
         """計算給定動作後的下一個狀態"""
+        next_state = state.copy()
         if self.last_action == 0:
             block = True
         else:
             block = False
-        valid_mask = self.get_valid_actions(current_state, block)
-        # board, item = self._split_state(current_state)
-        # 檢查是否有有效動作
-        if sum(valid_mask) == 1:  # 只有swap動作可用
-            # print("No valid action")
-            return None
+        valid_mask = self.get_valid_actions(next_state, block)
 
         self.last_action = action
         # 處理交換物品的特殊動作
         if action == 0:
-            return self._swap_action(current_state)
+            return self._swap_action(next_state)
 
         # 處理返回上一狀態的動作
         if action == -1:
             print("return to previous state")
             if self.memory_state is not None:
-                self.random_item = current_state[0]
+                self.random_item = next_state[0]
                 self.time_matrix = self.memory_time.copy()
                 self.now_state = self.memory_state.copy()
                 self.now_board, self.now_item = self._split_state(self.now_state)
                 self.game_score = self.last_game_score
                 return self.now_state
             else:
-                return current_state
+                return next_state
         else:
             # 保存當前狀態作為回退點
-            self.memory_state = current_state.copy()
+            self.memory_state = next_state.copy()
             self.memory_time = self.time_matrix.copy()
             self.last_game_score = self.game_score
 
         # 檢查動作是否有效
         if valid_mask[action] == 0:
             print("Invalid action")
-            return current_state
+            return next_state
         
         # 嘗試匹配熊的移動
-        self._try_match_bear_movement(self.now_state, current_state)
-        self.now_state = current_state
-        self.now_board, self.now_item = self._split_state(current_state)       
+        self._try_match_bear_movement(self.now_state, next_state)
+        self.now_state = next_state
+        self.now_board, self.now_item = self._split_state(next_state)       
         
         # 處理一般放置動作
         self.game_score += 1
