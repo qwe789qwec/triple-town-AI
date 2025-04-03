@@ -8,6 +8,7 @@ from PIL import Image
 import easyocr
 from pathlib import Path
 from collections import namedtuple
+from triple_town_simulate import TripleTownSim
 
 position = namedtuple('position', ['x', 'y'])
 region = namedtuple('region', ['x', 'y', 'w', 'h'])
@@ -17,21 +18,22 @@ class TripleTownHandler:
     def __init__(self, screen_dir='gameplay', output_dir='output'):
         self.step = 0
         self.screen_dir = screen_dir
-        os.path.exists(self.screen_dir, exist_ok=True)
+        os.makedirs(self.screen_dir, exist_ok=True)
         self.output_dir = output_dir
-        os.path.exists(self.output_dir, exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True)
 
-        self.screen = self._get_item_position()
-        self.screen.x -= 10
-        self.screen.y -= 10
-        self.game_region = region(self.screen.x, self.screen.y, 802, 639)
+        self.screen_center = self._get_item_position()
+        self.game_region = region(self.screen_center.x - 400, self.screen_center.y - 15, 800, 630)
 
-        # mouse standby and slot init
-        self.standby = position(self.screen.x + 533, self.screen.y + 108)
+        # mouse standby and slot init 2522 251
+        self.standby = position(self.game_region.x + 530, self.game_region.y + 100)
         pyautogui.moveTo(self.standby.x, self.standby.y)
         pyautogui.click()
-        self.slot_init = position(self.screen.x + 70, self.screen.y + 160)
-        self.score = region(100, 40, 380, 50)
+        # 2065 309
+        self.slot_init = position(self.game_region.x + 70, self.game_region.y + 160)
+
+        self.slot_capture = position(70, 160)
+        self.score = region(163, 41, 210, 40)
         self.slot_gap = 80
         self.slot_size = 60
 
@@ -58,14 +60,14 @@ class TripleTownHandler:
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
 
         # get window position
-        if max_val > 0.7:  # matching threshold
-            print(f"window position: {max_loc}")
+        if max_val > 0.8:  # matching threshold
             center_x = max_loc[0] + template.shape[1] // 2
             center_y = max_loc[1] + template.shape[0] // 2
+            print(f"window position: {center_x}, {center_y}")
             return position(center_x, center_y)
         else:
             print("no matching window found!")
-            return -1, -1
+            return position(-1, -1)
 
     def _get_next_game_number(self):
         os.makedirs(self.screen_dir, exist_ok=True)
@@ -83,14 +85,14 @@ class TripleTownHandler:
 
         return max(game_numbers, default=0) + 1
 
-    def _save_image(self, image, action=-1):
+    def save_image(self, image, action=-1):
         if image is None:
             print("No image to save.")
             return
-        gameinfo = "_".join(map(str, self.state.flatten()))
+        gameinfo = "_".join(map(str, self.status.flatten()))
         pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         self.step = self.step + 1
-        filename = f"game_{self.game_number}_{self.step}_{self.score}_{action}_info_{self.next_item}_{gameinfo}.png"
+        filename = f"game_{self.game_number}_{self.step}_{self.score}_{action}_info_{gameinfo}.png"
         pil_image.save(os.path.join(self.screen_dir, filename))
 
     def _get_score(self, take_screenshot=True):
@@ -120,42 +122,41 @@ class TripleTownHandler:
                 return self.last_score
         self.score = score
         return self.score
-
-    def slot_region(self, pos_x, pos_y):
-        slot_x = 70 + self.slot_gap * pos_x - (self.slot_size / 2)
-        slot_y = 160 + self.slot_gap * pos_y - (self.slot_size / 2)
-        return position(slot_x, slot_y)
     
-    def get_game_area(self, take_screenshot=True):
+    def game_status(self, take_screenshot=True):
+        self._take_screenshot(region=self.game_region)
+        retry_count = 0
         max_retries = 3
-        slot_matrix = np.full((6, 6), -1)
+        status = np.zeros(37, dtype=int)
 
-        for slot in range(36):
-            row, col = divmod(slot, 6)
-            slot = self.slot_region(row, col)
-            retry_count = 0
+        for slot_num in range(37):
+            if slot_num == 0:
+                check_pos = position(500, 70)
+            else:
+                row, col = divmod(slot_num - 1, 6)
+                slot_x = self.slot_capture.x + self.slot_gap * col - (self.slot_size // 2)
+                slot_y = self.slot_capture.y + self.slot_gap * row - (self.slot_size // 2)
+                check_pos = position(slot_x, slot_y)
+
             
             while retry_count < max_retries:
-                slot_img = self.latest_image[slot.y:slot.y + self.slot_size, slot.x:slot.x + self.slot_size]
-                index = self.find_matching_item(slot_img)
+                slot_img = self.game_shot[check_pos.y:check_pos.y + self.slot_size, check_pos.x:check_pos.x + self.slot_size]
+                index = self._find_matching_item(slot_img)
                 if index >= 21:
                     retry_count += 1
-                    slot_matrix[col, row] = 21
+                    status[slot_num] = 21
                     if take_screenshot and retry_count < max_retries:
-                        print(f"Failed to recognize slot {slot}, taking screenshot.")
+                        print(f"Failed to recognize slot {slot_num}, taking screenshot.")
                         time.sleep(1.5)
-                        self._take_screenshot()
+                        self._take_screenshot(region=self.game_region)
                 else:
-                    slot_matrix[col, row] = index
+                    status[slot_num] = index
                     break
 
-        next_item = self.latest_image[85:85 + 60, 508:508 + 60]
-        next_item_id = self.find_matching_item(next_item)
-        self.state = slot_matrix
-        self.next_item = next_item_id
-        return slot_matrix, next_item_id
+        self.status = status
+        return status
 
-    def find_matching_item(self, item_image):
+    def _find_matching_item(self, item_image):
         max_match_value = 0.6
         matching_item_id = None
         item_image_gray = cv2.cvtColor(item_image, cv2.COLOR_BGR2GRAY)
@@ -187,21 +188,36 @@ class TripleTownHandler:
         # else, save the new item image
         if matching_item_id is None:
             print("No match found, creating a new folder for this item.")
-            new_item_id = str(self.get_next_path_id("item_template"))
+            new_item_id = str(self._get_next_path_id("item_template"))
             new_folder = os.path.join("item_template", new_item_id)
             new_folder = Path(new_folder)
             new_folder.mkdir(parents=True, exist_ok=True)
-            image_index = self.get_next_path_id(new_folder)
+            image_index = self._get_next_path_id(new_folder)
             cv2.imwrite(os.path.join("item_template", new_item_id, f"{image_index}.png"), item_image)
             matching_item_id = new_item_id
         else:
-            image_index = self.get_next_path_id(os.path.join("item_template", matching_item_id))
+            image_index = self._get_next_path_id(os.path.join("item_template", matching_item_id))
             if image_index < 500 and max_match_value < 0.8:
                 cv2.imwrite(os.path.join("item_template", matching_item_id, f"{image_index}.png"), item_image)
 
         return int(matching_item_id)
     
-    def get_next_path_id(self, folder_path):
+    def stadnby(self):
+        pyautogui.moveTo(self.standby.x, self.standby.y)
+        pyautogui.click()
+        time.sleep(1.0)
+
+    def click_slot(self, action):
+        # play game
+        row, col = divmod(action, 6)
+        pyautogui.moveTo(self.slot_init.x + self.slot_gap * col, self.slot_init.y + self.slot_gap * row)
+        pyautogui.click()
+        if action in {2, 3}:
+            time.sleep(5.0)
+        else:
+            time.sleep(1.0)
+    
+    def _get_next_path_id(self, folder_path):
         existing_ids = []
         for item_folder in os.listdir(folder_path):
             folder_name, _ = os.path.splitext(item_folder)
@@ -214,44 +230,36 @@ class TripleTownHandler:
         return max(existing_ids) + 1
 
     def is_game_end(self):
-        template = cv2.imread('end_game_template.png', cv2.IMREAD_COLOR)
-        result = cv2.matchTemplate(self.latest_image, template, cv2.TM_CCOEFF_NORMED)
-        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-
-        # get continue position
-        if max_val > 0.8:  # matching threshold
-            print(f"game end")
-            return True
-        else:
-            # print("no matching window found!")
+        end_sign =self._get_item_position('buttons/continue.png')
+        if end_sign.x == -1 and end_sign.y == -1:
             return False
-        
-    def click_slot(self, action):
-        # play game
-        self.save_image(self.latest_image, action)
-        row, col = divmod(action, 6)
-        pyautogui.moveTo(self.slot_init_x + self.slot_gap * col, self.slot_init_y + self.slot_gap * row)
-        pyautogui.click()
-        if action in {2, 3}:
-            time.sleep(5.0)
         else:
-            time.sleep(1.0)
+            return True
 
-    def restart_game(self):
-        pyautogui.click(self.end_x, self.end_y)
-        time.sleep(3)
-        pyautogui.click(self.start_x, self.start_y)
-        time.sleep(5)
+    def reset(self):
+        continue_sign = self._get_item_position('buttons/continue.png')
+        if continue_sign.x != -1 and continue_sign.y != -1:
+            pyautogui.moveTo(continue_sign.x, continue_sign.y)
+            pyautogui.click()
+            time.sleep(3)
+        
+        sail_sign = self._get_item_position('buttons/sail.png')
+        if sail_sign.x != -1 and sail_sign.y != -1:
+            pyautogui.moveTo(sail_sign.x, sail_sign.y)
+            pyautogui.click()
+            time.sleep(3)
 
 test = False
 if test:
-    gamesc = TripleTownHandler()
-    gamesc._take_screenshot()
-    gamesc.latest_image = cv2.imread('save/game_1_0.png')
-    gamesc.click_slot(0)
-    gamesc._take_screenshot()
-    gamesc.save_image(gamesc.latest_image, 12)
-    state , next_item = gamesc.get_game_area()
-    print("state:\n", state)
-    print("next_item:", next_item)
-    print(gamesc.get_score())
+    game = TripleTownHandler()
+    gameSim = TripleTownSim()
+    while True:
+        game_status = game.game_status()
+        print(game_status)
+        gameSim.display_board(game_status)
+        action = int(input("请输入动作:"))
+        game.save_image(game.game_shot, action)
+        if action == -1:
+            break
+        else:
+            game.click_slot(action)
