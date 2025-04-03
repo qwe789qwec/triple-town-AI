@@ -17,11 +17,11 @@ def main():
         agent = TripleTownAgent()
         model_dir = "models"
         os.makedirs(model_dir, exist_ok=True)
-        model_name = "triple_town_model_ep2000.pt"
-        model_path = os.path.join(model_dir, model_name)
-        if os.path.exists(model_path):
-            agent.load(model_path)
-            print(f"已載入模型: {model_path}")
+        # model_name = "triple_town_model_ep2000.pt"
+        # model_path = os.path.join(model_dir, model_name)
+        # if os.path.exists(model_path):
+        #     agent.load(model_path)
+        #     print(f"已載入模型: {model_path}")
 
         agent.train(args.episodes)
     
@@ -34,7 +34,7 @@ def main():
         if os.path.exists(model_path):
             agent.load(model_path)
             print(f"已載入模型: {model_path}")
-            agent.validate(1)
+            agent.validate(100)
         else:
             print(f"找不到模型: {model_path}。請先訓練或指定有效的模型路徑。")
 

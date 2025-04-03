@@ -7,64 +7,69 @@ import numpy as np
 from PIL import Image
 import easyocr
 from pathlib import Path
+from collections import namedtuple
 
-reader = easyocr.Reader(['en'], gpu = True)
+position = namedtuple('position', ['x', 'y'])
+region = namedtuple('region', ['x', 'y', 'w', 'h'])
+size = namedtuple('size', ['w', 'h'])
 
 class TripleTownHandler:
     def __init__(self, screen_dir='gameplay', output_dir='output'):
         self.step = 0
         self.screen_dir = screen_dir
+        os.path.exists(self.screen_dir, exist_ok=True)
         self.output_dir = output_dir
-        self.init_mouse_position()
+        os.path.exists(self.output_dir, exist_ok=True)
 
-        # self.game_number = self.get_next_game_number()
-        # self.slot_gap = 80
-        # self.slot_size = 60
+        self.screen = self._get_item_position()
+        self.screen.x -= 10
+        self.screen.y -= 10
+        self.game_region = region(self.screen.x, self.screen.y, 802, 639)
 
-        # self.score = 0
-        # self.last_score = 0
+        # mouse standby and slot init
+        self.standby = position(self.screen.x + 533, self.screen.y + 108)
+        pyautogui.moveTo(self.standby.x, self.standby.y)
+        pyautogui.click()
+        self.slot_init = position(self.screen.x + 70, self.screen.y + 160)
+        self.score = region(100, 40, 380, 50)
+        self.slot_gap = 80
+        self.slot_size = 60
 
-    def init_mouse_position(self):
-        # get window position
-        self.screen_x, self.screen_y = self.get_game_position()
-        self.screen_w, self.screen_h = 802, 639
+        self.game_number = self._get_next_game_number()
+        self.score = 0
+        self.last_score = 0
 
-        # mouse standby and play game init
-        self.mouse_x = self.screen_x + 533
-        self.mouse_y = self.screen_y + 108
-        self.game_x = self.screen_x + 70
-        self.game_y = self.screen_y + 160
+    def _take_screenshot(self, region=None):
+        if region is not None:
+            pyautogui.moveTo(self.standby.x, self.standby.y)
+            pyautogui.click()
+            screenshot = pyautogui.screenshot(region=region)
+        else:
+            screenshot = pyautogui.screenshot()
+        frame = np.array(screenshot)
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        self.game_shot = frame
+        return frame
 
-        # score region
-        self.score_x = 100
-        self.score_y = 40
-        self.score_w = 380
-        self.score_h = 50
-
-        # end game and start game position
-        self.end_x = self.screen_x + 682
-        self.end_y = self.screen_y + 247
-        self.start_x = self.screen_x + 97
-        self.start_y = self.screen_y + 198
-
-    def get_game_position(self):
-        screenshot = pyautogui.screenshot()
-        screenshot = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-        template = cv2.imread('window_template.png', cv2.IMREAD_COLOR)
+    def _get_item_position(self, image_path='buttons/window.png'):
+        screenshot = self._take_screenshot()
+        template = cv2.imread(image_path, cv2.IMREAD_COLOR)
         result = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
 
         # get window position
-        if max_val > 0.8:  # matching threshold
+        if max_val > 0.7:  # matching threshold
             print(f"window position: {max_loc}")
-            return max_loc[0], max_loc[1]
+            center_x = max_loc[0] + template.shape[1] // 2
+            center_y = max_loc[1] + template.shape[0] // 2
+            return position(center_x, center_y)
         else:
             print("no matching window found!")
             return -1, -1
 
-    def get_next_game_number(self):
-        os.makedirs(self.save_dir, exist_ok=True)
-        existing_files = os.listdir(self.save_dir)
+    def _get_next_game_number(self):
+        os.makedirs(self.screen_dir, exist_ok=True)
+        existing_files = os.listdir(self.screen_dir)
 
         game_numbers = []
         for filename in existing_files:
@@ -77,42 +82,33 @@ class TripleTownHandler:
                     pass  # ignore invalid filenames
 
         return max(game_numbers, default=0) + 1
-    
-    def take_screenshot(self):
-        pyautogui.moveTo(self.mouse_x, self.mouse_y)
-        pyautogui.click()
-        screenshot = pyautogui.screenshot(region=(self.screen_x, self.screen_y, self.screen_w, self.screen_h))
-        frame = np.array(screenshot)
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        self.latest_image = frame
 
-    def save_image(self, image, action=-1):
+    def _save_image(self, image, action=-1):
         if image is None:
             print("No image to save.")
             return
         gameinfo = "_".join(map(str, self.state.flatten()))
         pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         self.step = self.step + 1
-        filename = f"game_{self.game_number}_{self.step}_{action}_info_{self.next_item}_{self.score}_{gameinfo}.png"
-        pil_image.save(os.path.join(self.save_dir, filename))
+        filename = f"game_{self.game_number}_{self.step}_{self.score}_{action}_info_{self.next_item}_{gameinfo}.png"
+        pil_image.save(os.path.join(self.screen_dir, filename))
 
-    def get_score(self, take_screenshot=True):
+    def _get_score(self, take_screenshot=True):
         score_str = None
         score = 0
         check_time = 0
+        reader = easyocr.Reader(['en'], gpu = True)
 
         while score is None and check_time < 2:
-            score_region = self.latest_image[self.score_y:self.score_y + self.score_h, self.score_x:self.score_x + self.score_w]
-            gray = cv2.cvtColor(score_region, cv2.COLOR_BGR2GRAY)
-            _, thresh_image = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
-            score_str = reader.readtext(thresh_image)
+            score_region = self.game_shot[self.score.y:self.score.y + self.score.h, self.score.x:self.score.x + self.score.w]
+            score_str = reader.readtext(cv2.cvtColor(score_region, cv2.COLOR_BGR2GRAY))
             check_time += 1
             if score_str is None and check_time < 2 and take_screenshot:
                 time.sleep(1)
-                self.take_screenshot()
+                self._take_screenshot(region=self.game_region)
         
         if score_str == [] or score_str is None:
-            score = 0
+            return 0
         else:
             try:
                 if score_str[0][1].count(',') > 0:
@@ -148,7 +144,7 @@ class TripleTownHandler:
                     if take_screenshot and retry_count < max_retries:
                         print(f"Failed to recognize slot {slot}, taking screenshot.")
                         time.sleep(1.5)
-                        self.take_screenshot()
+                        self._take_screenshot()
                 else:
                     slot_matrix[col, row] = index
                     break
@@ -234,7 +230,7 @@ class TripleTownHandler:
         # play game
         self.save_image(self.latest_image, action)
         row, col = divmod(action, 6)
-        pyautogui.moveTo(self.game_x + self.slot_gap * col, self.game_y + self.slot_gap * row)
+        pyautogui.moveTo(self.slot_init_x + self.slot_gap * col, self.slot_init_y + self.slot_gap * row)
         pyautogui.click()
         if action in {2, 3}:
             time.sleep(5.0)
@@ -249,11 +245,11 @@ class TripleTownHandler:
 
 test = False
 if test:
-    gamesc = triple_town_handler()
-    gamesc.take_screenshot()
+    gamesc = TripleTownHandler()
+    gamesc._take_screenshot()
     gamesc.latest_image = cv2.imread('save/game_1_0.png')
     gamesc.click_slot(0)
-    gamesc.take_screenshot()
+    gamesc._take_screenshot()
     gamesc.save_image(gamesc.latest_image, 12)
     state , next_item = gamesc.get_game_area()
     print("state:\n", state)

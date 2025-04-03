@@ -245,19 +245,13 @@ class TripleTownAgent:
                     block = False
                 action = self.select_action(state, block, explore=False)
                 next_state = self.game.next_state(state, action)
-                
-                self.game.display_board(state)
-                print("action", action)
-                print("score", self.game.game_score)
 
                 if next_state is None or self.game.is_game_over(next_state):
                     done = True
-                    print("================================================")
                 else:
                     state = next_state
             
             scores.append(self.game.game_score)
-            print(f"Game {i+1}: Score = {self.game.game_score}")
         
         avg_score = np.mean(scores)
         max_score = np.max(scores)
