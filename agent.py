@@ -114,13 +114,14 @@ class TripleTownAgent:
     
     def calculate_reward(self, prev_state, next_state, done):
         """改進的獎勵函數"""
-        self.item_count = [0] * len(self.game.ITEMS)
-
+        prev_item_count = np.zeros(len(self.game.ITEMS))
+        next_item_count = np.zeros(len(self.game.ITEMS))
+        
         if done:
-            return -20  # 增加遊戲結束的懲罰
+            return -100  # 增加遊戲結束的懲罰
         
         if next_state is None:
-            return -10  # 增加無效動作的懲罰
+            return -100  # 增加無效動作的懲罰
         
         # 分析狀態變化
         prev_board, _ = self.game._split_state(prev_state)
@@ -131,9 +132,12 @@ class TripleTownAgent:
 
         rows, cols = next_board.shape  # 假設是numpy陣列
 
+        # 物品獎勵
         for row in range(rows):
             for col in range(cols):
                 item = next_board[row, col]
+                prev_item_count[prev_board[row, col]] += 1
+                next_item_count[next_board[row, col]] += 1
                 if self.item_list[item] == 0:
                     self.item_list[item] = 1
                     if(item < 10):
@@ -142,7 +146,17 @@ class TripleTownAgent:
                         reward = (item - 10) * 10
                     if(item >= 5 and item <= 9):
                         self.game.display_board(next_state)
-        
+
+        # 物品獎勵
+        for item in range(len(self.game.ITEMS)):
+            if item in [10, 11, 12, 19]:
+                continue
+            if prev_item_count[item] < next_item_count[item]:
+                if item < 10:
+                    reward += item * 2
+                else:
+                    reward += (item - 10) * 3
+
         # 空間管理獎勵
         empty_prev = np.sum(prev_board == 0)
         empty_next = np.sum(next_board == 0)
@@ -215,10 +229,10 @@ class TripleTownAgent:
         plt.savefig(f'{model_dir}/triple_town_learning.png')
         plt.close()
     
-    def validate(self):
+    def validate(self, episodes = 20):
         scores = []
     
-        for i in range(20):
+        for i in range(episodes):
             state = self.game.reset()
             done = False
             action = None
@@ -266,4 +280,4 @@ class TripleTownAgent:
         self.policy_net.load_state_dict(checkpoint['policy_net'])
         self.target_net.load_state_dict(checkpoint['policy_net'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
-        self.epsilon = checkpoint['epsilon']
+        # self.epsilon = checkpoint['epsilon']
