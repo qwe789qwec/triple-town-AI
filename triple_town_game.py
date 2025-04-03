@@ -178,24 +178,27 @@ class TripleTownHandler:
                         max_match_value = score
                         matching_item_id = item_folder
                     if score > 0.8 and matching_item_id is not None:
-                        if not template_file.startswith("0_"):
-                            new_name = f"0_{template_file}"
-                            new_path = os.path.join(item_folder_path, new_name)
-                            os.rename(template_image_path, new_path)
-                            print(f"Renamed: {template_image_path} -> {new_path}")
+                        # if not template_file.startswith("0_"):
+                        #     new_name = f"0_{template_file}"
+                        #     new_path = os.path.join(item_folder_path, new_name)
+                        #     os.rename(template_image_path, new_path)
+                        #     print(f"Renamed: {template_image_path} -> {new_path}")
                         break
 
         # if no matching item found, create a new folder
         # else, save the new item image
         if matching_item_id is None:
             print("No match found, creating a new folder for this item.")
-            new_item_id = str(self._get_next_path_id("item_template"))
-            new_folder = os.path.join("item_template", new_item_id)
-            new_folder = Path(new_folder)
-            new_folder.mkdir(parents=True, exist_ok=True)
-            image_index = self._get_next_path_id(new_folder)
-            cv2.imwrite(os.path.join("item_template", new_item_id, f"{image_index}.png"), item_image)
-            matching_item_id = new_item_id
+            # new_item_id = str(self._get_next_path_id("item_template"))
+            # new_folder = os.path.join("item_template", new_item_id)
+            # new_folder = Path(new_folder)
+            # new_folder.mkdir(parents=True, exist_ok=True)
+            # image_index = self._get_next_path_id(new_folder)
+            # cv2.imwrite(os.path.join("item_template", new_item_id, f"{image_index}.png"), item_image)
+            # matching_item_id = new_item_id
+            matching_item_id = 21
+            image_index = self._get_next_path_id("item_template/21")
+            cv2.imwrite(os.path.join("item_template/21", f"{image_index}.png"), item_image)
         else:
             image_index = self._get_next_path_id(os.path.join("item_template", matching_item_id))
             if image_index < 500 and max_match_value < 0.8:
