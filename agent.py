@@ -39,7 +39,7 @@ class TripleTownAgent:
         # game params
         self.item_list = np.zeros(len(self.game.ITEMS))
     
-    def select_action(self, state, block=False, explore=True):
+    def select_action(self, state, block=False, explore=False):
         """選擇動作 - epsilon-greedy策略 + softmax"""
         valid_mask = self.game.get_valid_actions(state, block)
         valid_actions = np.where(valid_mask == 1)[0]
@@ -194,7 +194,7 @@ class TripleTownAgent:
                     block = True
                 else:
                     block = False
-                action = self.select_action(state, block)
+                action = self.select_action(state, block, explore=True)
                 next_state = self.game.next_state(state, action)
                 
                 # 檢查遊戲是否結束

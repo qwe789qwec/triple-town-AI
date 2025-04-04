@@ -2,7 +2,6 @@ from triple_town_game import TripleTownHandler
 from triple_town_simulate import TripleTownSim
 from agent import TripleTownAgent
 
-
 def main():
     game = TripleTownHandler()
     gameSim = TripleTownSim()
@@ -19,7 +18,7 @@ def main():
             block = True
         else:
             block = False
-        action = agent.select_action(state, block)
+        action = agent.select_action(state, block, explore=False)
         game.click_slot(action)
         if gameSim.is_game_over(state):
             break
