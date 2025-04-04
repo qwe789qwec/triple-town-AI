@@ -43,8 +43,8 @@ class TripleTownDQN(nn.Module):
         embedded_dim = self.input_cells * self.embedding_dim
         
         # 定義神經網絡層 - 在初始化時建立，而非每次前向傳播
-        self.fc1 = nn.Linear(embedded_dim, 128)
-        self.fc2 = nn.Linear(128, 256)
+        self.fc1 = nn.Linear(embedded_dim, 512)
+        self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, 128)
         self.fc4 = nn.Linear(128, self.num_actions)
     

@@ -29,11 +29,11 @@ class TripleTownAgent:
         
         # 學習參數
         self.batch_size = 1000
-        self.gamma = 0.99  # 折扣因子
+        self.gamma = 0.9  # 折扣因子
         self.epsilon = 1.0  # 初始探索率
         self.epsilon_min = 0.1  # 最小探索率
-        self.epsilon_decay = 0.9997  # 探索率衰減
-        self.target_update = 50  # 目標網絡更新頻率
+        self.epsilon_decay = 0.995  # 探索率衰減
+        self.target_update = 10  # 目標網絡更新頻率
         self.learn_counter = 0
 
         # game params
@@ -181,12 +181,18 @@ class TripleTownAgent:
         scores = []
         avg_scores = []
         total_reward = 0
+        
+        # 設定固定的 lambda 常數
+        lamda = 0.9  # eligibility trace 衰減參數
 
         for episode in tqdm(range(episodes)):
             state = self.game.reset()
             action = None
             done = False
             self.item_list = np.zeros(len(self.game.ITEMS))
+            
+            # 記錄整個 episode 的經驗
+            episode_buffer = []
 
             while not done:
                 # 選擇並執行動作
@@ -205,15 +211,49 @@ class TripleTownAgent:
                 reward = self.calculate_reward(state, next_state, done)
                 total_reward += reward
 
-                # 存儲經驗
-                self.memory.push(state, action, reward, next_state if not done else None, done)
-                
-                # 從經驗中學習
-                self.optimize_model()
+                # 將經驗添加到緩衝區
+                episode_buffer.append((state, action, reward, next_state, done))
                 
                 # 更新狀態
                 if not done and next_state is not None:
                     state = next_state
+            
+            # 處理整個 episode 的經驗，使用 SARSA(λ) 的思想
+            T = len(episode_buffer)
+            
+            # 從後向前計算回報
+            returns = []
+            G = 0
+            for t in reversed(range(T)):
+                _, _, r, _, d = episode_buffer[t]
+                G = r + self.gamma * G * (1 - int(d))
+                returns.insert(0, G)  # 在列表前面插入，以保持時間順序
+            
+            # 將經驗添加到回放緩衝區，使用 λ-return
+            for t in range(T):
+                state, action, reward, next_state, done = episode_buffer[t]
+                
+                # 計算 λ-return (一種簡化的實現)
+                if t == T - 1 or done:  # 最後一步或遊戲結束時
+                    G_lambda = reward
+                else:
+                    # 目標 Q 值
+                    next_state_tensor = torch.tensor(next_state, dtype=torch.float).to(self.device).unsqueeze(0)
+                    with torch.no_grad():
+                        max_q_next = self.target_net(next_state_tensor).max().item()
+                    
+                    # 使用 λ 混合 TD 目標與多步回報
+                    td_target = reward + self.gamma * max_q_next
+                    multi_step_return = returns[t]
+                    
+                    # λ-return: 將 TD 目標與多步回報混合
+                    G_lambda = (1 - lamda) * td_target + lamda * multi_step_return
+                
+                # 添加到回放緩衝區
+                self.memory.push(state, action, G_lambda, next_state, done)
+            
+            # 從經驗中學習
+            self.optimize_model()
             
             # 記錄分數
             scores.append(self.game.game_score)
@@ -240,7 +280,7 @@ class TripleTownAgent:
         plt.ylabel('Score')
         plt.savefig(f'{model_dir}/triple_town_learning.png')
         plt.close()
-    
+
     def validate(self, episodes = 20):
         scores = []
     

@@ -9,20 +9,12 @@ EVAL = True
 def main():
     # 解析命令行參數
     parser = argparse.ArgumentParser(description="Triple Town DQN Training")
-    parser.add_argument("--episodes", type=int, default=3000, help="訓練回合數")
+    parser.add_argument("--episodes", type=int, default=10000, help="訓練回合數")
     args = parser.parse_args()
     
     # 訓練
     if TRAIN:
         agent = TripleTownAgent()
-        model_dir = "models"
-        os.makedirs(model_dir, exist_ok=True)
-        # model_name = "triple_town_model_ep2000.pt"
-        # model_path = os.path.join(model_dir, model_name)
-        # if os.path.exists(model_path):
-        #     agent.load(model_path)
-        #     print(f"已載入模型: {model_path}")
-
         agent.train(args.episodes)
     
     # 只評估不訓練
