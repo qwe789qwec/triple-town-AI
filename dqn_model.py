@@ -24,52 +24,75 @@ class ReplayBuffer:
         return len(self.buffer)
 
 class TripleTownDQN(nn.Module):
-    """Triple Town遊戲的深度Q網絡模型"""
-    def __init__(self, board_size=6, embedding_dim=8):
+    def __init__(self):
         super(TripleTownDQN, self).__init__()
         # 基本參數
-        self.board_size = board_size
-        self.num_actions = board_size * board_size  # 6x6棋盤 = 36個可能的放置位置
-        self.num_item_types = 22  # 0-21的物品ID
-        self.embedding_dim = embedding_dim
+        self.board_size = 6
+        self.num_item_types = 22
+        self.embedding_dim = 8  # 增加嵌入維度
         
-        # 計算輸入大小 - 棋盤(6x6)和下一個物品(6x6)
-        self.input_cells = board_size * board_size + 1
-        
-        # 物品嵌入層 - 將物品ID轉換為向量表示
+        # 物品嵌入層
         self.item_embedding = nn.Embedding(self.num_item_types, self.embedding_dim)
         
-        # 計算嵌入後的特徵維度
-        embedded_dim = self.input_cells * self.embedding_dim
+        # 卷積網絡 - 更深層次且有批標準化
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(self.embedding_dim, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+        )
         
-        # 定義神經網絡層 - 在初始化時建立，而非每次前向傳播
-        self.fc1 = nn.Linear(embedded_dim, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, self.num_actions)
+        # 當前物品處理
+        self.item_fc = nn.Sequential(
+            nn.Linear(self.embedding_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+        )
+        
+        # 價值和優勢分離 (Dueling DQN架構)
+        self.advantage_stream = nn.Sequential(
+            nn.Linear(128 * self.board_size * self.board_size + 128, 512),
+            nn.ReLU(),
+            nn.Linear(512, 36)
+        )
+        
+        self.value_stream = nn.Sequential(
+            nn.Linear(128 * self.board_size * self.board_size + 128, 512),
+            nn.ReLU(),
+            nn.Linear(512, 1)
+        )
     
     def forward(self, state):
-        """前向傳播處理遊戲狀態並輸出每個動作的Q值"""
         batch_size = state.size(0)
         
-        # 將狀態展平為二維張量 [batch_size, cells]
-        state_flat = state.view(batch_size, -1)
+        # 分離當前物品和遊戲板
+        current_item = state[:, 0].long()
+        board = state[:, 1:].reshape(batch_size, self.board_size, self.board_size).long()
         
-        # 確保輸入到Embedding層的是長整型
-        state_long = state_flat.long()
+        # 處理當前物品
+        item_embedded = self.item_embedding(current_item)
+        item_features = self.item_fc(item_embedded)
         
-        # 將物品ID轉換為向量表示
-        item_embeddings = self.item_embedding(state_long)
+        # 處理遊戲板
+        board_embedded = self.item_embedding(board)
+        board_embedded = board_embedded.permute(0, 3, 1, 2)
+        board_features = self.conv_layers(board_embedded)
+        board_features = board_features.reshape(batch_size, -1)
         
-        # 將嵌入後的向量展平 [batch_size, cells*embedding_dim]
-        state_vector = item_embeddings.view(batch_size, -1)
+        # 合併特徵
+        combined_features = torch.cat([board_features, item_features], dim=1)
         
-        # 使用ReLU激活函數和批標準化的全連接層
-        x = F.relu(self.fc1(state_vector))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
+        # Dueling架構
+        advantage = self.advantage_stream(combined_features)
+        value = self.value_stream(combined_features)
         
-        # 輸出層 - 每個動作的Q值
-        q_values = self.fc4(x)
+        # Q值 = 價值 + (優勢 - 平均優勢)
+        q_values = value + (advantage - advantage.mean(dim=1, keepdim=True))
         
         return q_values

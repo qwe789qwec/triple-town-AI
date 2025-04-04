@@ -133,7 +133,7 @@ class TripleTownAgent:
             return -100  # 增加無效動作的懲罰
         
         if np.array_equal(prev_state, next_state):
-            return -30
+            return -50
         
         # 分析狀態變化
         prev_board, _ = self.game._split_state(prev_state)
@@ -156,7 +156,7 @@ class TripleTownAgent:
                         reward = item * 5
                     else:
                         reward = (item - 10) * 10
-                    if(item >= 5 and item <= 9):
+                    if(item >= 6 and item <= 9):
                         self.game.display_board(next_state)
 
         # 物品獎勵
@@ -183,7 +183,7 @@ class TripleTownAgent:
         total_reward = 0
         
         # 設定固定的 lambda 常數
-        lamda = 0.9  # eligibility trace 衰減參數
+        lamda = 0.5  # eligibility trace 衰減參數
 
         for episode in tqdm(range(episodes)):
             state = self.game.reset()
