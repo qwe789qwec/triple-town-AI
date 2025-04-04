@@ -29,13 +29,14 @@ class TripleTownHandler:
         self.standby = position(self.game_region.x + 530, self.game_region.y + 100)
         pyautogui.moveTo(self.standby.x, self.standby.y)
         pyautogui.click()
+        time.sleep(3.0)
         # 2065 309
         self.slot_init = position(self.game_region.x + 70, self.game_region.y + 160)
 
         self.slot_capture = position(70, 160)
         self.score = region(163, 41, 210, 40)
         self.slot_gap = 80
-        self.slot_size = 60
+        self.slot_size = 80
 
         self.game_number = self._get_next_game_number()
         self.score = 0

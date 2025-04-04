@@ -132,7 +132,7 @@ class TripleTownAgent:
         if next_state is None:
             return -100  # 增加無效動作的懲罰
         
-        if prev_board[0, 0] == next_board[0, 0]:
+        if np.array_equal(prev_state, next_state):
             return -30
         
         # 分析狀態變化
