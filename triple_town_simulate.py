@@ -141,6 +141,10 @@ class TripleTownSim:
         valid_mask = self.get_valid_actions(state)
         if state[1] == self.ITEMS["empty"]:
             return False
+        
+        if np.array_equal(state, np.ones(37)):
+            return True
+        
         return sum(valid_mask) == 1  # 只有swap動作可用
     
     def get_valid_actions(self, state, block_swap=False):
