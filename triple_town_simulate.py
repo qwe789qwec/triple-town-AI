@@ -158,6 +158,9 @@ class TripleTownSim:
             valid_cells = (board_flatten == 0) | (board_flatten == self.ITEMS["treasure"]) | (board_flatten == self.ITEMS["Ltreasure"])
             mask[valid_cells] = 1
         
+        if self.last_action == 0:
+            block_swap = True
+
         # 設置swap動作的有效性
         if block_swap:
             mask[0] = 0
@@ -288,7 +291,6 @@ class TripleTownSim:
         self.now_state = self.next_state(self.now_state, action)
         reward = self.game_score
         done = self.is_game_over(self.now_state)
-        print("state: ", self.now_state, "action: ", action, "reward: ", reward, "done: ", done)
         
         return self.now_state, reward, done, action
     
