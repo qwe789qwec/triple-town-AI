@@ -170,6 +170,7 @@ class TripleTownSim:
     def display_board(self, state):
         """在控制台显示游戏状态"""
         board, next_item = self._split_state(state)
+        print("score:", self.game_score)
         print("下一个物品:", self.ITEM_ICONS[str(next_item)])
         
         # 显示带有动作索引的棋盘
@@ -287,6 +288,7 @@ class TripleTownSim:
         self.now_state = self.next_state(self.now_state, action)
         reward = self.game_score
         done = self.is_game_over(self.now_state)
+        print("state: ", self.now_state, "action: ", action, "reward: ", reward, "done: ", done)
         
         return self.now_state, reward, done, action
     
@@ -300,9 +302,6 @@ class TripleTownSim:
         valid_mask = self.get_valid_actions(next_state, block)
 
         self.last_action = action
-        # 處理交換物品的特殊動作
-        if action == 0:
-            return self._swap_action(next_state)
 
         # 處理返回上一狀態的動作
         if action == -1:
@@ -327,6 +326,10 @@ class TripleTownSim:
             # print("Invalid action")
             return np.ones(37, dtype=int)
             # return next_state
+            
+        # 處理交換物品的特殊動作
+        if action == 0:
+            return self._swap_action(next_state)
         
         # 嘗試匹配熊的移動
         self._try_match_bear_movement(self.now_state, next_state)
@@ -653,5 +656,5 @@ def test_game():
 
 
 # 是否运行测试
-# if __name__ == "__main__":
-#     test_game()
+if __name__ == "__main__":
+    test_game()
