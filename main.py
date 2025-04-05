@@ -9,7 +9,7 @@ EVAL = True
 def main():
     # 解析命令行參數
     parser = argparse.ArgumentParser(description="Triple Town DQN Training")
-    parser.add_argument("--episodes", type=int, default=10000, help="訓練回合數")
+    parser.add_argument("--episodes", type=int, default=3000, help="訓練回合數")
     args = parser.parse_args()
     
     # 訓練

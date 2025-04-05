@@ -282,6 +282,14 @@ class TripleTownSim:
                     bear_changes_new.remove((r2, c2))
                     break
     
+    def step(self, action):
+        last_state = self.now_state.copy()
+        self.now_state = self.next_state(self.now_state, action)
+        reward = self.game_score
+        done = self.is_game_over(self.now_state)
+        
+        return self.now_state, reward, done, action
+    
     def next_state(self, state, action):
         """計算給定動作後的下一個狀態"""
         next_state = state.copy()
@@ -316,8 +324,9 @@ class TripleTownSim:
 
         # 檢查動作是否有效
         if valid_mask[action] == 0:
-            print("Invalid action")
-            return next_state
+            # print("Invalid action")
+            return np.ones(37, dtype=int)
+            # return next_state
         
         # 嘗試匹配熊的移動
         self._try_match_bear_movement(self.now_state, next_state)
