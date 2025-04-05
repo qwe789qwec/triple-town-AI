@@ -16,7 +16,7 @@ size = namedtuple('size', ['w', 'h'])
 
 class TripleTownHandler:
     def __init__(self, screen_dir='gameplay', output_dir='output'):
-        self.step = 0
+        self.game_step = 0
         self.screen_dir = screen_dir
         os.makedirs(self.screen_dir, exist_ok=True)
         self.output_dir = output_dir
@@ -92,8 +92,8 @@ class TripleTownHandler:
             return
         gameinfo = "_".join(map(str, self.status.flatten()))
         pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        self.step = self.step + 1
-        filename = f"game_{self.game_number}_{self.step}_{self.score}_{action}_info_{gameinfo}.png"
+        self.game_step = self.game_step + 1
+        filename = f"game_{self.game_number}_{self.game_step}_{self.score}_{action}_info_{gameinfo}.png"
         pil_image.save(os.path.join(self.screen_dir, filename))
 
     def _get_score(self, take_screenshot=True):
@@ -157,6 +157,17 @@ class TripleTownHandler:
 
         self.status = status
         return status
+
+    def step(self, action):
+        self.click_slot(action)
+        reward = self.game_step
+        done = self.is_game_over()
+        if done:
+            new_status = np.ones(37, dtype=int)
+        else:
+            new_status = self.game_status()
+
+        return new_status, reward, done, action
 
     def _find_matching_item(self, item_image):
         max_match_value = 0.6
