@@ -198,7 +198,7 @@ class TripleTownSim:
         rows, cols = next_board.shape  # 假設是numpy陣列
 
         # 物品獎勵
-        for item in range(len(self.game.ITEMS)):
+        for item in range(len(self.ITEMS)):
             if item in [10, 11, 12, 19]:
                 continue
             if prev_item_count[item] < next_item_count[item]:

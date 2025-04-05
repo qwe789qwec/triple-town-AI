@@ -154,7 +154,7 @@ class MCTS:
             # 階段3: 回溯更新
             for node in reversed(search_path):
                 node.update(value)
-                value = -value  # 對於單人遊戲，可以移除此行
+                # value = -value  # 對於單人遊戲，可以移除此行
     
     def get_action_probs(self, state, temp=1.0):
         """獲取行動概率分布"""
