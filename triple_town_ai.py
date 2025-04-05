@@ -114,4 +114,4 @@ def main_sim():
     print("average reward: ", np.mean(reward_list))
 
 if __name__ == "__main__":
-    main()
+    main_sim()

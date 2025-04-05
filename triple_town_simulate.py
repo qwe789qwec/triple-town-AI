@@ -180,13 +180,13 @@ class TripleTownSim:
         next_item_count = np.zeros(len(self.ITEMS))
         
         if done:
-            return -100  # 增加遊戲結束的懲罰
+            return -50  # 增加遊戲結束的懲罰
         
         if next_state is None:
-            return -100  # 增加無效動作的懲罰
+            return -50  # 增加無效動作的懲罰
         
         if np.array_equal(prev_state, next_state):
-            return -50
+            return -20
         
         # 分析狀態變化
         prev_board, _ = self._split_state(prev_state)
