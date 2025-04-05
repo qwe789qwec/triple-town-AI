@@ -127,6 +127,7 @@ class TripleTownSim:
         self.now_board, self.now_item = self._split_state(state)
         self.time_matrix = np.zeros((6, 6), dtype=int)
         self.game_score = 0
+        self.game_reward = 0
         self._reload_time_matrix(state)
         
         return state
@@ -173,6 +174,46 @@ class TripleTownSim:
             
         return mask
     
+    def calculate_reward(self, prev_state, next_state, done):
+        """改進的獎勵函數"""
+        prev_item_count = np.zeros(len(self.ITEMS))
+        next_item_count = np.zeros(len(self.ITEMS))
+        
+        if done:
+            return -100  # 增加遊戲結束的懲罰
+        
+        if next_state is None:
+            return -100  # 增加無效動作的懲罰
+        
+        if np.array_equal(prev_state, next_state):
+            return -50
+        
+        # 分析狀態變化
+        prev_board, _ = self._split_state(prev_state)
+        next_board, _ = self._split_state(next_state)
+        
+        # 基礎獎勵
+        reward = 0
+
+        rows, cols = next_board.shape  # 假設是numpy陣列
+
+        # 物品獎勵
+        for item in range(len(self.game.ITEMS)):
+            if item in [10, 11, 12, 19]:
+                continue
+            if prev_item_count[item] < next_item_count[item]:
+                if item < 10:
+                    reward += item * 2
+                else:
+                    reward += (item - 10) * 3
+
+        # 空間管理獎勵
+        empty_prev = np.sum(prev_board == 0)
+        empty_next = np.sum(next_board == 0)
+        if empty_next > empty_prev:
+            reward += 3
+        
+        return reward
     
     def display_board(self, state):
         """在控制台显示游戏状态"""
@@ -293,8 +334,10 @@ class TripleTownSim:
     def step(self, action):
         last_state = self.now_state.copy()
         self.now_state = self.next_state(self.now_state, action)
-        reward = self.game_score
+        # reward = self.game_score
         done = self.is_game_over(self.now_state)
+        reward = self.calculate_reward(last_state, self.now_state, done)
+        
         
         return self.now_state, reward, done, action
     
