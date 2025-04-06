@@ -134,6 +134,7 @@ class TripleTownSim:
     
     def copy(self):
         copy_sim = TripleTownSim()
+        copy_sim.now_state = self.now_state.copy()
         copy_sim.now_board = self.now_board.copy()
         copy_sim.now_item = self.now_item.copy()
         copy_sim.time_matrix = self.time_matrix.copy()
@@ -343,8 +344,8 @@ class TripleTownSim:
     
     def step(self, action):
         last_state = self.now_state.copy()
-        self.now_state = self.next_state(self.now_state, action)
-        # reward = self.game_score
+        # self.now_state = self.next_state(self.now_state, action)
+        reward = self.game_score
         done = self.is_game_over(self.now_state)
         reward = self.calculate_reward(last_state, self.now_state, done)
         

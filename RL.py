@@ -53,34 +53,18 @@ class TripleTownNet(nn.Module):
         return F.log_softmax(policy_logits, dim=1), value
     
 class MCTSNode:
-    def __init__(self, state=None, action_from_parent=None, prior_prob=0, parent=None):
-        self.state = state  # 存儲當前狀態
-        self.action_from_parent = action_from_parent  # 從父節點到達此節點的動作
+    def __init__(self, prior_prob=0, parent=None):
         self.parent = parent
-        self.children = {}  # {action: [MCTSNode, ...]} - 每個動作可能有多個後續狀態
-        self.visit_count = 0
-        self.value_sum = 0.0
-        self.prior_prob = prior_prob
+        self.children = {}  # 子節點: {action: MCTSNode}
+        self.visit_count = 0  # 訪問次數
+        self.value_sum = 0.0  # 累積價值
+        self.prior_prob = prior_prob  # 先驗概率
         
-    def expand(self, actions_probs, sim_env, n_samples=3):
-        """根據策略網絡和環境模擬擴展節點"""
+    def expand(self, actions_probs):
+        """根據策略網絡的輸出擴展節點"""
         for action, prob in actions_probs:
             if action not in self.children:
-                self.children[action] = []
-            
-            # 為每個動作模擬多個可能的後續狀態
-            for _ in range(n_samples):
-                env_copy = TripleTownSim(sim_env)
-                next_state, reward, done, _ = env_copy.step(action)
-                
-                # 為每個(action, next_state)對創建一個節點
-                child_node = MCTSNode(
-                    state=next_state,
-                    action_from_parent=action,
-                    prior_prob=prob/n_samples,  # 分配概率
-                    parent=self
-                )
-                self.children[action].append(child_node)
+                self.children[action] = MCTSNode(prior_prob=prob, parent=self)
     
     def select(self, c_puct=5.0):
         """選擇最有價值的子節點"""
@@ -88,102 +72,108 @@ class MCTSNode:
         best_action = -1
         best_child = None
         
-        for action, child_nodes in self.children.items():
-            for child in child_nodes:
-                if child.visit_count > 0:
-                    q_value = child.value_sum / child.visit_count
-                    u_value = c_puct * child.prior_prob * math.sqrt(self.visit_count) / (1 + child.visit_count)
-                    score = q_value + u_value
-                else:
-                    score = c_puct * child.prior_prob * math.sqrt(self.visit_count + 1e-8)
+        # UCB公式: Q(s,a) + c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
+        for action, child in self.children.items():
+            if child.visit_count > 0:
+                q_value = child.value_sum / child.visit_count
+                u_value = c_puct * child.prior_prob * math.sqrt(self.visit_count) / (1 + child.visit_count)
+                score = q_value + u_value
+            else:
+                # 優先訪問未探索的節點
+                score = c_puct * child.prior_prob * math.sqrt(self.visit_count + 1e-8)
+            
+            if score > best_score:
+                best_score = score
+                best_action = action
+                best_child = child
                 
-                if score > best_score:
-                    best_score = score
-                    best_action = action
-                    best_child = child
-                    
         return best_action, best_child
     
     def update(self, value):
+        """更新節點統計信息"""
         self.visit_count += 1
         self.value_sum += value
     
     def is_leaf(self):
+        """檢查是否為葉節點"""
         return len(self.children) == 0
     
     def is_root(self):
+        """檢查是否為根節點"""
         return self.parent is None
 
 class MCTS:
-    def __init__(self, policy_value_fn, n_simulations=1000, c_puct=5.0, n_samples=3):
+    def __init__(self, policy_value_fn, n_simulations=1000, c_puct=5.0):
         self.policy_value_fn = policy_value_fn
         self.n_simulations = n_simulations
         self.c_puct = c_puct
-        self.n_samples = n_samples
         self.root = MCTSNode()
     
-    def search(self, state):
+    def search(self, env):
         """執行MCTS搜索"""
-        self.root.state = state
-        
         for _ in range(self.n_simulations):
+            # 模擬環境用於搜索
+            sim_env = env.copy()  # 假設環境支援複製
+            sim_state = sim_env.now_state
+
+            # 階段1: 選擇
             node = self.root
             search_path = [node]
-            sim_env = TripleTownSim(state)
-            current_state = sim_env.now_state.copy()
+            action_path = []
             done = False
-            
-            # 階段1: 選擇
-            while not node.is_leaf() and not done:
+
+
+            # 選擇階段: 尋找葉節點
+            while not node.is_leaf():
                 action, node = node.select(self.c_puct)
                 search_path.append(node)
-                current_state = node.state
-                
-                # 如果不是根節點，更新模擬環境狀態
-                if node.action_from_parent is not None:
-                    _, reward, done, _ = sim_env.step(node.action_from_parent)
-            
+                action_path.append(action)
+
+                sim_state, reward, done, _ = sim_env.step(action)
+                if done:
+                    break
+
             # 階段2: 擴展與評估
             if not done:
-                log_probs, value = self.policy_value_fn(current_state)
+                # 使用策略網絡評估該狀態
+                log_probs, value = self.policy_value_fn(sim_state)
                 probs = np.exp(log_probs.cpu().detach().numpy())
                 valid_probs = []
-                valid_moves = sim_env.get_valid_actions(current_state)
+                # 只考慮合法動作
+                valid_moves = sim_env.get_valid_actions(sim_state)
                 for a in range(len(valid_moves)):
                     if valid_moves[a] == 1:
                         valid_probs.append((a, probs[0][a]))
                 
-                # 擴展節點，考慮每個動作的多種可能結果
-                node.expand(valid_probs, current_state, self.n_samples)
+                # 擴展節點
+                node.expand(valid_probs)
             else:
+                # 遊戲結束，使用實際獎勵作為評估
                 value = reward
             
             # 階段3: 回溯更新
             for node in reversed(search_path):
                 node.update(value)
+                # value = -value  # 對於單人遊戲，可以移除此行
     
     def get_action_probs(self, state, temp=1.0):
-        """獲取動作概率"""
-        self.search(state)
+        """獲取行動概率分布"""
+        # 根據訪問次數計算概率
+        visit_counts = np.array([
+            self.root.children[a].visit_count if a in self.root.children else 0
+            for a in range(6 * 6)
+        ])
         
-        # 計算每個動作的總訪問次數
-        action_visits = {}
-        for action, child_nodes in self.root.children.items():
-            action_visits[action] = sum(child.visit_count for child in child_nodes)
-        
-        actions = list(action_visits.keys())
-        visits = np.array([action_visits[a] for a in actions])
-        
-        if temp == 0:  # 確定性選擇
-            action_idx = np.argmax(visits)
-            action_probs = np.zeros(len(actions))
-            action_probs[action_idx] = 1.0
-            return actions, action_probs
+        if temp == 0:  # 貪婪選擇
+            action = np.argmax(visit_counts)
+            probs = np.zeros_like(visit_counts)
+            probs[action] = 1.0
+            return probs
         else:
-            # 根據溫度參數計算概率
-            visits = visits ** (1.0 / temp)
-            action_probs = visits / np.sum(visits)
-            return actions, action_probs
+            # 溫度控制探索程度
+            scaled_counts = visit_counts ** (1.0 / temp)
+            probs = scaled_counts / np.sum(scaled_counts)
+            return probs
     
 class TripleTownRL:
     def __init__(self, net, env, lr=0.001, buffer_size=10000, batch_size=128):
@@ -211,18 +201,17 @@ class TripleTownRL:
 
             while True:
                 # 執行MCTS搜索
-                mcts.search(state)
+                mcts.search(self.env)
                 
                 # 根據訪問計數獲取行動概率
-                actions, action_probs = mcts.get_action_probs(state, temp=1.0)
+                action_probs = mcts.get_action_probs(state, temp=1.0)
                 
                 # 保存當前狀態與MCTS概率
                 states.append(state)
                 mcts_probs.append(action_probs)
                 
                 # 依概率選擇動作
-                action_idx = np.random.choice(len(action_probs), p=action_probs)
-                action = actions[action_idx]
+                action = np.random.choice(len(action_probs), p=action_probs)
 
                 # 執行動作
                 state, reward, done, _ = self.env.step(action)
@@ -251,39 +240,24 @@ class TripleTownRL:
         
         # 從經驗回放緩衝區取樣
         minibatch = random.sample(self.buffer, self.batch_size)
-
-        # 方法1：從環境獲取
-        max_actions = self.env.action_space.n
-        # 方法2：在訓練過程中動態確定
-        max_len = max(len(data[1]) for data in minibatch)
-
+    
         # 逐個處理狀態
         all_log_probs = []
         all_values = []
-        mcts_probs_list = []
-        returns_list = []
         
         for data in minibatch:
             state = data[0]
-            macts_probs = data[1]
-            returns_value = data[2]
-
-            padded_probs = np.zeros(max_len)
-            padded_probs[:len(macts_probs)] = macts_probs
-
             log_prob, value = self.net(state)
             all_log_probs.append(log_prob)
             all_values.append(value)
-            mcts_probs_list.append(padded_probs)
-            returns_list.append(returns_value)
         
         # 堆疊結果
         log_probs = torch.cat(all_log_probs, dim=0)
         values = torch.cat(all_values, dim=0)
-
+        
         # 將列表轉換為 numpy 數組，然後轉為張量 (避免警告)
-        mcts_probs_batch = torch.FloatTensor(np.array(mcts_probs_list)).to(log_probs.device)
-        returns_batch = torch.FloatTensor(np.array(returns_list)).unsqueeze(1).to(values.device)
+        mcts_probs_batch = torch.FloatTensor(np.array([data[1] for data in minibatch])).to(log_probs.device)
+        returns_batch = torch.FloatTensor(np.array([data[2] for data in minibatch])).unsqueeze(1).to(values.device)
         
         # 計算損失
         value_loss = F.mse_loss(values, returns_batch)
