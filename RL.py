@@ -251,24 +251,39 @@ class TripleTownRL:
         
         # 從經驗回放緩衝區取樣
         minibatch = random.sample(self.buffer, self.batch_size)
-    
+
+        # 方法1：從環境獲取
+        max_actions = self.env.action_space.n
+        # 方法2：在訓練過程中動態確定
+        max_len = max(len(data[1]) for data in minibatch)
+
         # 逐個處理狀態
         all_log_probs = []
         all_values = []
+        mcts_probs_list = []
+        returns_list = []
         
         for data in minibatch:
             state = data[0]
+            macts_probs = data[1]
+            returns_value = data[2]
+
+            padded_probs = np.zeros(max_len)
+            padded_probs[:len(macts_probs)] = macts_probs
+
             log_prob, value = self.net(state)
             all_log_probs.append(log_prob)
             all_values.append(value)
+            mcts_probs_list.append(padded_probs)
+            returns_list.append(returns_value)
         
         # 堆疊結果
         log_probs = torch.cat(all_log_probs, dim=0)
         values = torch.cat(all_values, dim=0)
-        
+
         # 將列表轉換為 numpy 數組，然後轉為張量 (避免警告)
-        mcts_probs_batch = torch.FloatTensor(np.array([data[1] for data in minibatch])).to(log_probs.device)
-        returns_batch = torch.FloatTensor(np.array([data[2] for data in minibatch])).unsqueeze(1).to(values.device)
+        mcts_probs_batch = torch.FloatTensor(np.array(mcts_probs_list)).to(log_probs.device)
+        returns_batch = torch.FloatTensor(np.array(returns_list)).unsqueeze(1).to(values.device)
         
         # 計算損失
         value_loss = F.mse_loss(values, returns_batch)

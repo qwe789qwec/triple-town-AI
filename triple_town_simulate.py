@@ -132,6 +132,16 @@ class TripleTownSim:
         
         return state
     
+    def copy(self):
+        copy_sim = TripleTownSim()
+        copy_sim.now_board = self.now_board.copy()
+        copy_sim.now_item = self.now_item.copy()
+        copy_sim.time_matrix = self.time_matrix.copy()
+        copy_sim.game_score = self.game_score
+        copy_sim.last_action = self.last_action
+        copy_sim.last_game_score = self.last_game_score
+        return copy_sim
+    
     def _get_random_element(self, probilities, size = 1):
         items = [self.ITEMS[item] for item in probilities.keys()]
         probs = list(probilities.values())
