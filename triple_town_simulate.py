@@ -135,8 +135,7 @@ class TripleTownSim:
     def copy(self):
         copy_sim = TripleTownSim()
         copy_sim.now_state = self.now_state.copy()
-        copy_sim.now_board = self.now_board.copy()
-        copy_sim.now_item = self.now_item
+        copy_sim.now_board, copy_sim.now_item = copy_sim._split_state(copy_sim.now_state)
         copy_sim.time_matrix = self.time_matrix.copy()
         copy_sim.game_score = self.game_score
         copy_sim.last_action = self.last_action
@@ -343,8 +342,7 @@ class TripleTownSim:
                     break
     
     def step(self, action):
-        last_state = self.now_state.copy()
-        # self.now_state = self.next_state(self.now_state, action)
+        self.now_state = self.next_state(self.now_state, action)
         reward = self.game_score
         done = self.is_game_over(self.now_state)
         # reward = self.calculate_reward(last_state, self.now_state, done)
@@ -361,7 +359,7 @@ class TripleTownSim:
             block = False
         valid_mask = self.get_valid_actions(next_state, block)
 
-        self.last_action = action
+        self.last_action = int(action)
 
         # 處理返回上一狀態的動作
         if action == -1:
@@ -381,8 +379,9 @@ class TripleTownSim:
             self.memory_time = self.time_matrix.copy()
             self.last_game_score = self.game_score
 
+        action = int(action)
         # 檢查動作是否有效
-        if valid_mask[action] == 0:
+        if valid_mask[int(action)] == 0:
             # print("Invalid action")
             return np.ones(37, dtype=int)
             # return next_state

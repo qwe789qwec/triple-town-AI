@@ -24,7 +24,7 @@ class TripleTownAgent:
         self.epsilon_decay = 0.9995  # 探索率衰減率
         self.epsilon_min = 0.1  # 最小探索率
 
-    def select_action(self, state, block, MCTS_depth = 1000, explore=True):
+    def select_action(self, state, block, MCTS_depth = 100, explore=True):
         """選擇動作"""
         # 使用MCTS進行搜索
         mcts = MCTS(self.policy_net, depth=MCTS_depth)

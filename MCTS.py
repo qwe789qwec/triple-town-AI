@@ -52,7 +52,7 @@ class MCTSNode:
         return self.parent is None
 
 class MCTS:
-    def __init__(self, policy_value_fn, depth=5, c_puct=5.0):
+    def __init__(self, policy_value_fn, depth=100, c_puct=5.0):
         self.policy_value_fn = policy_value_fn
         self.depth = depth
         self.c_puct = c_puct
@@ -60,10 +60,10 @@ class MCTS:
     
     def search(self, env):
         """執行MCTS搜索"""
-        sim_env = env.copy()  # 假設環境支援複製
-        current_reward = sim_env.game_score
         for _ in range(self.depth):
             # 模擬環境用於搜索
+            sim_env = env.copy()  # 假設環境支援複製
+            current_reward = sim_env.game_score
             sim_state = sim_env.now_state
 
             # 階段1: 選擇
@@ -78,10 +78,8 @@ class MCTS:
                 action, node = node.select(self.c_puct)
                 search_path.append(node)
                 action_path.append(action)
-
                 sim_state, reward, done, _ = sim_env.step(action)
                 if done:
-                    print("game over")
                     break
                 if reward - current_reward > self.depth:
                     break
