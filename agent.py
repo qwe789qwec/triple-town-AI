@@ -5,9 +5,9 @@ import numpy as np
 import random
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from collections import deque
 from model import ReplayBuffer
 from MCTS import MCTSNode, MCTS
+import time
 
 class TripleTownAgent:
     """Triple Town智能體"""
@@ -34,7 +34,8 @@ class TripleTownAgent:
         action_softmax = np.exp(action_probs * action_mask) / np.sum(action_probs * action_mask)
 
         if explore and random.random() < self.epsilon:
-            return random.choice(self.env.get_valid_actions(state, block)), action_softmax
+            indices = np.where(action_mask > 0.5)[0]
+            return np.random.choice(indices), action_softmax
         
         if explore:
             # softmax 採樣
@@ -48,13 +49,22 @@ class TripleTownAgent:
         if len(self.memory) < self.batch_size:
             return
 
-        state_batch, action_probs_batch, reward_batch, next_state_batch, done_batch = self.memory.sample(self.batch_size)
+        batch = self.memory.sample(self.batch_size)
 
-        state_batch = torch.tensor(state_batch).to(self.device)
-        action_probs_batch = torch.tensor(action_probs_batch).to(self.device)
-        reward_batch = torch.tensor(reward_batch).to(self.device)
-        next_state_batch = torch.tensor(next_state_batch).to(self.device)
-        done_batch = torch.tensor(done_batch).to(self.device)
+        # 將 batch.state 轉換為 NumPy 陣列
+        state_batch = np.array(batch.state, dtype=np.float32)
+        # 將其他批次數據轉換為 NumPy 陣列
+        action_probs_batch = np.array(batch.action_probs, dtype=np.float32)
+        reward_batch = np.array(batch.reward, dtype=np.float32)
+        next_state_batch = np.array(batch.next_state, dtype=np.float32)
+        done_batch = np.array(batch.done, dtype=np.float32)
+
+        # 將 NumPy 陣列轉換為 PyTorch 張量
+        state_batch = torch.from_numpy(state_batch).to(self.device)
+        action_probs_batch = torch.from_numpy(action_probs_batch).to(self.device)
+        reward_batch = torch.from_numpy(reward_batch).to(self.device)
+        next_state_batch = torch.from_numpy(next_state_batch).to(self.device)
+        done_batch = torch.from_numpy(done_batch).to(self.device)
 
         # 使用策略網絡計算當前狀態的 Q 值
         net_action_probs, net_reward = self.policy_net(state_batch)
@@ -112,7 +122,8 @@ class TripleTownAgent:
             self.optimize_model()
             
             # 記錄分數
-            scores.append(self.env.game_score)
+            print("final_reward", final_reward)
+            scores.append(final_reward)
             avg_scores.append(np.mean(scores[-300:]) if len(scores) >= 300 else np.mean(scores))
             
             # 定期打印進度

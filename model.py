@@ -5,7 +5,7 @@ from collections import deque, namedtuple
 import random
 
 # 定義經驗元組
-Experience = namedtuple('Experience', ('state', 'action', 'reward', 'next_state', 'done'))
+Experience = namedtuple('Experience', ('state', 'action_probs', 'reward', 'next_state', 'done'))
 
 class ReplayBuffer:
     """經驗回放緩衝區"""
@@ -18,7 +18,9 @@ class ReplayBuffer:
     
     def sample(self, batch_size):
         """隨機抽樣經驗"""
-        return random.sample(self.buffer, batch_size)
+        experiences = random.sample(self.buffer, batch_size)
+        batch = Experience(*zip(*experiences))
+        return batch
     
     def __len__(self):
         return len(self.buffer)
