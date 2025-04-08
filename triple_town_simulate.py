@@ -136,7 +136,7 @@ class TripleTownSim:
         copy_sim = TripleTownSim()
         copy_sim.now_state = self.now_state.copy()
         copy_sim.now_board = self.now_board.copy()
-        copy_sim.now_item = self.now_item.copy()
+        copy_sim.now_item = self.now_item
         copy_sim.time_matrix = self.time_matrix.copy()
         copy_sim.game_score = self.game_score
         copy_sim.last_action = self.last_action
