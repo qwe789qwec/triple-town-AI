@@ -33,13 +33,17 @@ class TripleTownAgent:
         action_mask = self.env.get_valid_actions(state, block)
         action_softmax = np.exp(action_probs * action_mask) / np.sum(action_probs * action_mask)
 
+        masked_logits = action_probs[action_mask > 0.5]
+        masked_softmax = np.exp(masked_logits - np.max(masked_logits))
+        masked_softmax /= np.sum(masked_softmax)
+        indices = np.where(action_mask > 0.5)[0]
+
         if explore and random.random() < self.epsilon:
-            indices = np.where(action_mask > 0.5)[0]
             return np.random.choice(indices), action_softmax
         
         if explore:
             # softmax 採樣
-            action = np.random.choice(len(action_probs), p=action_softmax)
+            action = np.random.choice(indices, p=masked_softmax)
         else:
             action = np.argmax(action_softmax)
         
