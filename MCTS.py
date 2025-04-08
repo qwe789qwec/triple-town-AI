@@ -52,7 +52,7 @@ class MCTSNode:
         return self.parent is None
 
 class MCTS:
-    def __init__(self, policy_value_fn, depth=1000, c_puct=5.0):
+    def __init__(self, policy_value_fn, depth=5, c_puct=5.0):
         self.policy_value_fn = policy_value_fn
         self.depth = depth
         self.c_puct = c_puct
@@ -60,9 +60,10 @@ class MCTS:
     
     def search(self, env):
         """執行MCTS搜索"""
+        sim_env = env.copy()  # 假設環境支援複製
+        current_reward = sim_env.game_score
         for _ in range(self.depth):
             # 模擬環境用於搜索
-            sim_env = env.copy()  # 假設環境支援複製
             sim_state = sim_env.now_state
 
             # 階段1: 選擇
@@ -80,6 +81,9 @@ class MCTS:
 
                 sim_state, reward, done, _ = sim_env.step(action)
                 if done:
+                    print("game over")
+                    break
+                if reward - current_reward > self.depth:
                     break
 
             # 階段2: 擴展與評估
@@ -105,7 +109,7 @@ class MCTS:
                 node.update(value)
                 # value = -value  # 對於單人遊戲，可以移除此行
     
-    def get_action_probs(self, temp=1.0):
+    def get_action_probs(self, temperature=1.0):
         """獲取行動概率分布"""
         # 根據訪問次數計算概率
         visit_counts = np.array([
@@ -113,13 +117,13 @@ class MCTS:
             for a in range(6 * 6)
         ])
         
-        if temp == 0:  # 貪婪選擇
+        if temperature == 0:  # 貪婪選擇
             action = np.argmax(visit_counts)
             probs = np.zeros_like(visit_counts)
             probs[action] = 1.0
             return probs
         else:
             # 溫度控制探索程度
-            scaled_counts = visit_counts ** (1.0 / temp)
+            scaled_counts = visit_counts ** (1.0 / temperature)
             probs = scaled_counts / np.sum(scaled_counts)
             return probs

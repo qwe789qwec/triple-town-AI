@@ -24,7 +24,7 @@ class TripleTownAgent:
         self.epsilon_decay = 0.9995  # 探索率衰減率
         self.epsilon_min = 0.1  # 最小探索率
 
-    def select_action(self, state, block, MCTS_depth = 100, explore=True):
+    def select_action(self, state, block, MCTS_depth = 1000, explore=True):
         """選擇動作"""
         # 使用MCTS進行搜索
         mcts = MCTS(self.policy_net, depth=MCTS_depth)
@@ -76,7 +76,7 @@ class TripleTownAgent:
         loss.backward()
         self.optimizer.step()
 
-    def train(self, episodes, model_dir = "models"):
+    def train(self, episodes, MCTS_depth = 100, model_dir = "models"):
         scores = []
         avg_scores = []
 
@@ -94,7 +94,7 @@ class TripleTownAgent:
                     block = True
                 else:
                     block = False
-                action, action_probs = self.select_action(state, block=block, MCTS_depth=100, explore=True)
+                action, action_probs = self.select_action(state, block=block, MCTS_depth=MCTS_depth, explore=True)
                 next_state, reward, done, _ = self.env.step(action)
                 episode_buffer.append((state, action_probs, reward, next_state, done))
                 state = next_state

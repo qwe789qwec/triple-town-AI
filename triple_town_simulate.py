@@ -347,7 +347,7 @@ class TripleTownSim:
         # self.now_state = self.next_state(self.now_state, action)
         reward = self.game_score
         done = self.is_game_over(self.now_state)
-        reward = self.calculate_reward(last_state, self.now_state, done)
+        # reward = self.calculate_reward(last_state, self.now_state, done)
         
         
         return self.now_state, reward, done, action

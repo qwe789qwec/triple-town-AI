@@ -19,7 +19,7 @@ def main():
     
     # 訓練智能體
     trainer = TripleTownAgent(net, env)
-    trainer.train(episodes=1000, MCTS_depth=400, games_per_epoch=10)
+    trainer.train(episodes=1000, MCTS_depth=30)
     
     # 保存最終模型
     torch.save(net.state_dict(), "triple_town_model_final.pt")
