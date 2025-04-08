@@ -1,6 +1,6 @@
 from triple_town_game import TripleTownHandler
 from triple_town_simulate import TripleTownSim
-from dqn_model import TripleTownDQN, TripleTownNet
+from model import TripleTownNet
 import torch.nn.functional as F
 import numpy as np
 import torch

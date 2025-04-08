@@ -2,35 +2,27 @@ import os
 import argparse
 from triple_town_simulate import TripleTownSim
 from agent import TripleTownAgent
-
-TRAIN = True
-EVAL = True
+from model import TripleTownNet
+import torch
 
 def main():
-    # 解析命令行參數
-    parser = argparse.ArgumentParser(description="Triple Town DQN Training")
-    parser.add_argument("--episodes", type=int, default=3000, help="訓練回合數")
-    args = parser.parse_args()
+    # 初始化環境和模型
+    env = TripleTownSim()
+    net = TripleTownNet(board_size=6, num_piece_types=22)
     
-    # 訓練
-    if TRAIN:
-        agent = TripleTownAgent()
-        agent.train(args.episodes)
+    # 載入現有模型（如果有）
+    try:
+        net.load_state_dict(torch.load("triple_town_model.pt"))
+        print("no model")
+    except:
+        print("train new model")
     
-    # 只評估不訓練
-    if EVAL:
-        agent = TripleTownAgent()
-        
-        # 載入模型進行評估
-        model_path = "models/triple_town_model_final.pt"
-        if os.path.exists(model_path):
-            agent.load(model_path)
-            print(f"已載入模型: {model_path}")
-            agent.validate(100)
-        else:
-            print(f"找不到模型: {model_path}。請先訓練或指定有效的模型路徑。")
-
-        
+    # 訓練智能體
+    trainer = TripleTownAgent(net, env)
+    trainer.train(episodes=1000, MCTS_depth=400, games_per_epoch=10)
+    
+    # 保存最終模型
+    torch.save(net.state_dict(), "triple_town_model_final.pt")
 
 if __name__ == "__main__":
     main()
