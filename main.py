@@ -5,10 +5,12 @@ from agent import TripleTownAgent
 from model import TripleTownNet
 import torch
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def main():
     # 初始化環境和模型
     env = TripleTownSim()
-    net = TripleTownNet(board_size=6, num_piece_types=22)
+    net = TripleTownNet(device, board_size=6, num_piece_types=22)
     
     # 載入現有模型（如果有）
     try:
@@ -18,7 +20,7 @@ def main():
         print("train new model")
     
     # 訓練智能體
-    trainer = TripleTownAgent(net, env)
+    trainer = TripleTownAgent(net, device, env)
     trainer.train(episodes=1000, MCTS_depth=100)
     
     # 保存最終模型

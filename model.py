@@ -26,15 +26,15 @@ class ReplayBuffer:
         return len(self.buffer)
 
 class TripleTownNet(nn.Module):
-    def __init__(self, board_size=6, num_piece_types=22):
+    def __init__(self, device, board_size=6, num_piece_types=22):
         super(TripleTownNet, self).__init__()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
         
         # 輸入特徵處理
         self.board_size = board_size
         self.input_channels = board_size * board_size + 1
         self.embedding_size = 8
-        self.embedding = nn.Embedding(num_piece_types, self.embedding_size)
+        self.embedding = nn.Embedding(num_piece_types, self.embedding_size).to(self.device)
         
         # 使用全連接層替代卷積層
         self.fc1 = nn.Linear(self.input_channels * self.embedding_size, 256)
@@ -48,10 +48,15 @@ class TripleTownNet(nn.Module):
         # 價值頭 - 預測狀態的價值
         self.value_fc1 = nn.Linear(256, 128)
         self.value_fc2 = nn.Linear(128, 1)
+        self.to(self.device)
+
     
     def forward(self, state):
-        x = torch.tensor(state, dtype=torch.float).to("cpu").unsqueeze(0)
-        x = self.embedding(x.long())
+        if not isinstance(state, torch.Tensor):
+            x = torch.tensor(state, dtype=torch.long, device=self.device).unsqueeze(0)
+        else:
+            x = state
+        x = self.embedding(x)
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))

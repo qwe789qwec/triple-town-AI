@@ -11,8 +11,8 @@ import time
 
 class TripleTownAgent:
     """Triple Town智能體"""
-    def __init__(self, net, env, lr=0.0003, buffer_size=10000, batch_size=512):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    def __init__(self, net, device, env, lr=0.0003, buffer_size=10000, batch_size=512):
+        self.device = device
 
         self.policy_net = net
         self.env = env
@@ -48,23 +48,16 @@ class TripleTownAgent:
     def optimize_model(self):
         if len(self.memory) < self.batch_size:
             return
-
+        
+         # 抽樣批次經驗
         batch = self.memory.sample(self.batch_size)
-
-        # 將 batch.state 轉換為 NumPy 陣列
-        state_batch = np.array(batch.state, dtype=np.float32)
-        # 將其他批次數據轉換為 NumPy 陣列
-        action_probs_batch = np.array(batch.action_probs, dtype=np.float32)
-        reward_batch = np.array(batch.reward, dtype=np.float32)
-        next_state_batch = np.array(batch.next_state, dtype=np.float32)
-        done_batch = np.array(batch.done, dtype=np.float32)
-
-        # 將 NumPy 陣列轉換為 PyTorch 張量
-        state_batch = torch.from_numpy(state_batch).to(self.device)
-        action_probs_batch = torch.from_numpy(action_probs_batch).to(self.device)
-        reward_batch = torch.from_numpy(reward_batch).to(self.device)
-        next_state_batch = torch.from_numpy(next_state_batch).to(self.device)
-        done_batch = torch.from_numpy(done_batch).to(self.device)
+        
+        # 轉換為張量
+        state_batch = torch.tensor(np.array(batch.state), dtype=torch.long, device=self.device)
+        action_probs_batch = torch.tensor(np.array(batch.action_probs), dtype=torch.long, device=self.device)
+        reward_batch = torch.tensor(batch.reward, dtype=torch.float, device=self.device)
+        next_state_batch = torch.tensor(np.array(batch.next_state), dtype=torch.float, device=self.device)
+        done_batch = torch.tensor(batch.done, dtype=torch.float, device=self.device)
 
         # 使用策略網絡計算當前狀態的 Q 值
         net_action_probs, net_reward = self.policy_net(state_batch)
@@ -126,6 +119,9 @@ class TripleTownAgent:
             scores.append(final_reward)
             avg_scores.append(np.mean(scores[-300:]) if len(scores) >= 300 else np.mean(scores))
             
+            if episode % 10 == 0:
+                self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
+
             # 定期打印進度
             if episode % 100 == 0:
                 best_score = np.max(scores)
