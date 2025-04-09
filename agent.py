@@ -11,12 +11,14 @@ import time
 
 class TripleTownAgent:
     """Triple Town智能體"""
-    def __init__(self, net, device, env, lr=0.0003, buffer_size=10000, batch_size=512):
+    def __init__(self, policy, predict, device, env, lr=0.0003, buffer_size=10000, batch_size=512):
         self.device = device
 
-        self.policy_net = net
+        self.policy_net = policy
+        self.predict_net = predict
         self.env = env
-        self.optimizer = optim.Adam(net.parameters(), lr=lr, weight_decay=1e-4)
+        self.policy_opt = optim.Adam(self.policy_net.parameters(), lr=lr, weight_decay=1e-4)
+        self.predict_opt = optim.Adam(self.predict_net.parameters(), lr=lr, weight_decay=1e-4)
         self.memory = ReplayBuffer(capacity=500000)
         self.batch_size = batch_size
 
@@ -49,7 +51,7 @@ class TripleTownAgent:
         
         return action, action_softmax
 
-    def optimize_model(self):
+    def optimize_policy(self):
         if len(self.memory) < self.batch_size:
             return
         
@@ -61,7 +63,7 @@ class TripleTownAgent:
         action_probs_batch = torch.tensor(np.array(batch.action_probs), dtype=torch.long, device=self.device)
         reward_batch = torch.tensor(batch.reward, dtype=torch.float, device=self.device)
         next_state_batch = torch.tensor(np.array(batch.next_state), dtype=torch.float, device=self.device)
-        done_batch = torch.tensor(batch.done, dtype=torch.float, device=self.device)
+        action_batch = torch.tensor(batch.action, dtype=torch.float, device=self.device)
 
         # 使用策略網絡計算當前狀態的 Q 值
         net_action_probs, net_reward = self.policy_net(state_batch)
@@ -79,9 +81,33 @@ class TripleTownAgent:
         # 4. 總損失
         loss = reward_loss.mean() + policy_loss.mean() + 0.01 * l2_reg
 
-        self.optimizer.zero_grad()
+        self.policy_opt.zero_grad()
         loss.backward()
-        self.optimizer.step()
+        self.policy_opt.step()
+    
+    def optimize_predict(self):
+        if len(self.memory) < self.batch_size:
+            return
+        
+        # 抽樣批次經驗
+        batch = self.memory.sample(self.batch_size)
+        
+        # 轉換為張量
+        state_batch = torch.tensor(np.array(batch.state), dtype=torch.long, device=self.device)
+        action_probs_batch = torch.tensor(np.array(batch.action_probs), dtype=torch.long, device=self.device)
+        reward_batch = torch.tensor(batch.reward, dtype=torch.float, device=self.device)
+        next_state_batch = torch.tensor(np.array(batch.next_state), dtype=torch.float, device=self.device)
+        action_batch = torch.tensor(batch.action, dtype=torch.float, device=self.device)
+        zero_action = torch.zeros(len(action_batch[0]), dtype=torch.float, device=self.device)
+
+        predict_state , state_embedding = self.predict_net(state_batch, action_batch)
+        _, next_state_embedding = self.policy_net(next_state_batch, zero_action)
+        predict_loss = (predict_state - next_state_embedding) ** 2
+
+        self.predict_opt.zero_grad()
+        predict_loss.mean().backward()
+        self.predict_opt.step()
+
 
     def train(self, episodes, MCTS_depth = 100, model_dir = "models"):
         scores = []
@@ -116,7 +142,7 @@ class TripleTownAgent:
                 self.memory.push(state, action, left_reward, next_state, done)
             
             # 從經驗中學習
-            self.optimize_model()
+            self.optimize_policy()
             
             # 記錄分數
             print("final_reward", final_reward)
@@ -178,7 +204,7 @@ class TripleTownAgent:
         """保存模型"""
         torch.save({
             'policy_net': self.policy_net.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
+            'optimizer': self.policy_opt.state_dict(),
             'epsilon': self.epsilon
         }, filename)
     
@@ -186,5 +212,5 @@ class TripleTownAgent:
         """載入模型"""
         checkpoint = torch.load(filename)
         self.policy_net.load_state_dict(checkpoint['policy_net'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        self.policy_opt.load_state_dict(checkpoint['optimizer'])
         # self.epsilon = checkpoint['epsilon']
