@@ -29,14 +29,25 @@ class TripleTownAgent:
         # 使用MCTS進行搜索
         mcts = MCTS(self.policy_net, depth=MCTS_depth)
         mcts.search(self.env)
-        action_probs = mcts.get_action_probs(temperature=self.epsilon)
-        action_mask = self.env.get_valid_actions(state, block)
-        action_softmax = np.exp(action_probs * action_mask) / np.sum(action_probs * action_mask)
+        try:
+            action_probs = mcts.get_action_probs(temperature=self.epsilon)
+            action_mask = self.env.get_valid_actions(state, block)
+            action_softmax = np.exp(action_probs * action_mask) / np.sum(action_probs * action_mask)
 
-        masked_logits = action_probs[action_mask > 0.5]
-        masked_softmax = np.exp(masked_logits - np.max(masked_logits))
-        masked_softmax /= np.sum(masked_softmax)
-        indices = np.where(action_mask > 0.5)[0]
+            masked_logits = action_probs[action_mask > 0.5]
+            masked_softmax = np.exp(masked_logits - np.max(masked_logits))
+            masked_softmax /= np.sum(masked_softmax)
+            indices = np.where(action_mask > 0.5)[0]
+        except Exception as e:
+            print(f"error: {e}")
+            print("state:", state)
+            print("action_probs:", action_probs)
+            print("action_mask:", action_mask)
+            print("action_softmax:", action_softmax)
+            print("masked_logits:", masked_logits)
+            print("masked_softmax:", masked_softmax)
+            print("indices:", indices)
+            exit()
 
         if explore and random.random() < self.epsilon:
             return np.random.choice(indices), action_softmax
@@ -184,7 +195,8 @@ class TripleTownAgent:
     
     def load(self, filename):
         """載入模型"""
+        print(f"Loading model from {filename}")
         checkpoint = torch.load(filename)
         self.policy_net.load_state_dict(checkpoint['policy_net'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
-        # self.epsilon = checkpoint['epsilon']
+        self.epsilon = checkpoint['epsilon']
