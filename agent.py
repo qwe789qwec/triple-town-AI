@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from model import ReplayBuffer
 from MCTS import MCTSNode, MCTS
 import time
+from triple_town_game import TripleTownHandler
 
 class TripleTownAgent:
     """Triple Town智能體"""
@@ -165,6 +166,7 @@ class TripleTownAgent:
 
     def validate(self, MCTS_depth = 100, episodes = 20):
         scores = []
+        self.policy_net.eval()
         
         for episode in tqdm(range(episodes)):
             state = self.env.reset()
@@ -174,7 +176,6 @@ class TripleTownAgent:
 
             while not done:
                 if action == 0:
-                    print("block")
                     block = True
                 else:
                     block = False
@@ -192,6 +193,38 @@ class TripleTownAgent:
         avg_score = np.mean(scores)
         print("high score", np.max(scores))
         print(f"Validation Score: {avg_score:.2f}")
+    
+    def realplay(self, MCTS_depth = 100):
+        scores = []
+        self.policy_net.eval()
+        game = TripleTownHandler()
+        game.reset()
+        action = None
+        if game.screen_center.x == -1:
+            exit()
+        
+        state = game.game_status()
+        done = False
+
+        while not done:
+            # state = game.game_status()
+            if action == 0:
+                print("block")
+                block = True
+            else:
+                block = False
+            self.env.fix_state(state)
+            action, action_probs = self.select_action(state, block=block, MCTS_depth=MCTS_depth, explore=False)
+
+            new_state, reward, done, _ = game.step(action)
+            self.env.step(action)
+            print("action: ", action)
+            self.env.display_board(state)
+            state = new_state
+            if done:
+                break
+
+        print("final_reward", reward)
 
     def save(self, filename):
         """保存模型"""

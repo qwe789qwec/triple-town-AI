@@ -347,6 +347,13 @@ class TripleTownSim:
         
         return self.now_state, reward, done, action
     
+    def fix_state(self, state):
+        new_state = state.copy()
+        # 嘗試匹配熊的移動
+        self._try_match_bear_movement(self.now_state, new_state)
+        self.now_state = new_state
+        self.now_board, self.now_item = self._split_state(new_state) 
+
     def next_state(self, state, action):
         """計算給定動作後的下一個狀態"""
         next_state = state.copy()
@@ -385,11 +392,6 @@ class TripleTownSim:
         # 處理交換物品的特殊動作
         if action == 0:
             return self._swap_action(next_state)
-        
-        # 嘗試匹配熊的移動
-        self._try_match_bear_movement(self.now_state, next_state)
-        self.now_state = next_state
-        self.now_board, self.now_item = self._split_state(next_state)       
         
         # 處理一般放置動作
         self.game_score += 1
