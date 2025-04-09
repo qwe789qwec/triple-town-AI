@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import torch.nn.functional as F
 
 class MCTSNode:
     def __init__(self, prior_prob=0, parent=None):
@@ -88,7 +89,8 @@ class MCTS:
             if not done:
                 # 使用策略網絡評估該狀態
                 log_probs, value = self.policy_value_fn(sim_state)
-                probs = np.exp(log_probs.cpu().detach().numpy())
+                # probs = np.exp(log_probs.cpu().detach().numpy())
+                probs = F.softmax(log_probs, dim=1).cpu().detach().numpy()
                 valid_probs = []
                 # 只考慮合法動作
                 valid_moves = sim_env.get_valid_actions(sim_state)
