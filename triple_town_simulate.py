@@ -345,8 +345,8 @@ class TripleTownSim:
         self.now_state = self.next_state(self.now_state, action)
         reward = self.game_score
         done = self.is_game_over(self.now_state)
+        self.last_action = int(action)
         # reward = self.calculate_reward(last_state, self.now_state, done)
-        
         
         return self.now_state, reward, done, action
     
@@ -358,8 +358,6 @@ class TripleTownSim:
         else:
             block = False
         valid_mask = self.get_valid_actions(next_state, block)
-
-        self.last_action = int(action)
 
         # 處理返回上一狀態的動作
         if action == -1:
@@ -380,6 +378,7 @@ class TripleTownSim:
             self.last_game_score = self.game_score
 
         action = int(action)
+
         # 檢查動作是否有效
         if valid_mask[int(action)] == 0:
             # print("Invalid action")
@@ -697,23 +696,32 @@ def test_game():
         4 ,0 ,4 ,1 ,1 ,15,
         0 ,1 ,3 ,0 ,10,11,
         11,2 ,0 ,13,13,14])
+    
+    test_state = np.array([ 10,
+        1, 10, 10, 10, 10, 10,
+        10, 10, 10, 10, 10, 10,
+        10, 10, 10, 10, 10, 10,
+        10, 10, 10, 10, 10, 10,
+        10, 10, 10, 10, 10, 10,
+        10, 10, 0, 10, 10, 10])
 
-    game = TripleTownSim()
+    game = TripleTownSim(test_state)
     
     state = game.now_state
     
     while True:
         game.display_board(state)
         action = int(input("请输入动作:"))
-        state = game.next_state(game.now_state, action)
-        print("得分:", game.game_score)
+        next_state, reward, done, _ = game.step(action)
+        state = next_state
+        print("得分:", reward)
         print("=============================================================")
         
-        if game.is_game_over(state):
+        if done:
             print("游戏结束")
             break
 
 
 # 是否运行测试
-if __name__ == "__main__":
-    test_game()
+# if __name__ == "__main__":
+#     test_game()
