@@ -32,7 +32,9 @@ class TripleTownAgent:
         mcts = MCTS(self.policy_net, depth=MCTS_depth)
         mcts.search(self.env)
         try:
-            action_probs = mcts.get_action_probs(temperature=self.epsilon)
+            visit_counts = mcts.get_action_probs()
+            scaled_counts = visit_counts ** (1.0 / self.epsilon)
+            action_probs = scaled_counts / np.sum(scaled_counts)
             action_mask = self.env.get_valid_actions(state, block)
             action_softmax = np.exp(action_probs * action_mask) / np.sum(action_probs * action_mask)
 
@@ -51,6 +53,8 @@ class TripleTownAgent:
             print("indices:", indices)
             exit()
 
+
+        
         if explore and random.random() < self.epsilon:
             return np.random.choice(indices), action_softmax
         
@@ -185,31 +189,35 @@ class TripleTownAgent:
         plt.savefig(f'{model_dir}/triple_town_learning.png')
         plt.close()
 
-    def validate(self, episodes = 20):
+    def validate(self, MCTS_depth = 100, episodes = 20):
         scores = []
-    
-        for i in range(episodes):
+        
+        for episode in tqdm(range(episodes)):
             state = self.env.reset()
-            done = False
             action = None
-            
+            done = False
+            final_reward = 0
+
             while not done:
-                # 使用學習到的策略選擇動作
                 if action == 0:
+                    print("block")
                     block = True
                 else:
                     block = False
-                action = self.select_action(state, block, MCTS_depth=100, explore=False)
+                action, action_probs = self.select_action(state, block=block, MCTS_depth=MCTS_depth, explore=False)
+                print("=========================")
+                print("action", action)
+                self.env.display_board(state)
                 next_state, reward, done, _ = self.env.step(action)
-            
-            scores.append(reward)
-        
+                state = next_state
+                final_reward = reward
+
+            print("final_reward", final_reward)
+            scores.append(final_reward)
+
         avg_score = np.mean(scores)
-        max_score = np.max(scores)
-        
-        print(f"\nEvaluation Results:")
-        print(f"Average Score: {avg_score:.2f}")
-        print(f"Maximum Score: {max_score}")
+        print("high score", np.max(scores))
+        print(f"Validation Score: {avg_score:.2f}")
 
     def save(self, filename):
         """保存模型"""
