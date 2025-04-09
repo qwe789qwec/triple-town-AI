@@ -4,13 +4,14 @@ from model import TripleTownNet
 import torch.nn.functional as F
 import numpy as np
 import torch
+from MCTS import MCTSNode, MCTS
 
 def main():
     # game = TripleTownHandler()
     gameSim = TripleTownSim()
     game = TripleTownHandler()
     net = TripleTownNet()
-    net.load_state_dict(torch.load("models/triple_town_model_epoch_100.pt"))
+    net.load_state_dict(torch.load("models/triple_town_model_ep300.pt"))
     net.eval()
     # game.reset()
     action = -1
@@ -63,7 +64,7 @@ def main():
 def main_sim():
     gameSim = TripleTownSim()
     net = TripleTownNet()
-    net.load_state_dict(torch.load("models/triple_town_model_epoch_100.pt"))
+    net.load_state_dict(torch.load("models/triple_town_model_ep300.pt"))
     net.eval()
     # game.reset()
     action = -1
