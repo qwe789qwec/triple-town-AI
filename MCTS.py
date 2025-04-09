@@ -93,7 +93,11 @@ class MCTS:
                 probs = F.softmax(log_probs, dim=1).cpu().detach().numpy()
                 valid_probs = []
                 # 只考慮合法動作
-                valid_moves = sim_env.get_valid_actions(sim_state)
+                if sim_env.last_action == 0:
+                    block = True
+                else:
+                    block = False
+                valid_moves = sim_env.get_valid_actions(sim_state, block)
                 for a in range(len(valid_moves)):
                     if valid_moves[a] == 1:
                         valid_probs.append((a, probs[0][a]))
@@ -109,21 +113,12 @@ class MCTS:
                 node.update(value)
                 # value = -value  # 對於單人遊戲，可以移除此行
     
-    def get_action_probs(self, temperature=1.0):
+    def get_action_probs(self):
         """獲取行動概率分布"""
         # 根據訪問次數計算概率
         visit_counts = np.array([
             self.root.children[a].visit_count if a in self.root.children else 0
             for a in range(6 * 6)
         ])
-        
-        if temperature == 0:  # 貪婪選擇
-            action = np.argmax(visit_counts)
-            probs = np.zeros_like(visit_counts)
-            probs[action] = 1.0
-            return probs
-        else:
-            # 溫度控制探索程度
-            scaled_counts = visit_counts ** (1.0 / temperature)
-            probs = scaled_counts / np.sum(scaled_counts)
-            return probs
+
+        return visit_counts

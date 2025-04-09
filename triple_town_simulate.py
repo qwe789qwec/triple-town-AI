@@ -172,16 +172,13 @@ class TripleTownSim:
             # 其他物品可以放在空位置或寶藏位置
             valid_cells = (board_flatten == 0) | (board_flatten == self.ITEMS["treasure"]) | (board_flatten == self.ITEMS["Ltreasure"])
             mask[valid_cells] = 1
-        
-        if self.last_action == 0:
-            block_swap = True
 
         # 設置swap動作的有效性
         if block_swap:
             mask[0] = 0
         else:
             mask[0] = 1
-            
+
         return mask
     
     def calculate_reward(self, prev_state, next_state, done):
